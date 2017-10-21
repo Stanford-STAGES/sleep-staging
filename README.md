@@ -1,1 +1,1 @@
-# sleep-staging
+# narcolepsy-detector
