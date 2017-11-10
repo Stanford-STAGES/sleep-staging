@@ -1,0 +1,45 @@
+License Information for Sleep Staging software
+
+The sleep staging portion of the Narcolepsy Detector project is licensed under a
+Creative Commons Attribution 3.0 license (CC BY 3.0 US; https://creativecommons.org/licenses/by/3.0/us/).
+
+Attribution for using this license in research, publications, and other software
+should be assigned to:  "Stephansen JB, Ambati A, Leary EB, Moore HE, Carrillo O, Lin L, Hogl B, Stefani A, Hong SC, Kim TW, Pizza F. The use of neural networks in the analysis of sleep stages and the diagnosis of narcolepsy. arXiv preprint arXiv:1710.02094. 2017 Oct 5."
+
+The following BiBTex is included in cases where other formatting standards are required for publication.
+
+@article{DBLP:journals/corr/abs-1710-02094,
+  author    = {Jens B. Stephansen and
+               Aditya Ambati and
+               Eileen B. Leary and
+               Hyatt E. Moore IV and
+               Oscar Carrillo and
+               Ling Lin and
+               Birgit Hogl and
+               Ambra Stefani and
+               Seung Chul Hong and
+               Tae Won Kim and
+               Fabio Pizza and
+               Giuseppe Plazzi and
+               Stefano Vandi and
+               Elena Antelmi and
+               Dimitri Perrin and
+               Samuel T. Kuna and
+               Paula K. Schweitzer and
+               Clete Kushida and
+               Paul E. Peppard and
+               Poul Jennum and
+               Helge B. D. S{\o}rensen and
+               Emmanuel Mignot},
+  title     = {The use of neural networks in the analysis of sleep stages and the
+               diagnosis of narcolepsy},
+  journal   = {CoRR},
+  volume    = {abs/1710.02094},
+  year      = {2017},
+  url       = {http://arxiv.org/abs/1710.02094},
+  archivePrefix = {arXiv},
+  eprint    = {1710.02094},
+  timestamp = {Wed, 01 Nov 2017 19:05:43 +0100},
+  biburl    = {http://dblp.org/rec/bib/journals/corr/abs-1710-02094},
+  bibsource = {dblp computer science bibliography, http://dblp.org}
+}
