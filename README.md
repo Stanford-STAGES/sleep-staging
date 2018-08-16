@@ -1,3 +1,9 @@
+# Description 
+
+This repository represents the sleep staging classification work down using neural networks at Stanford University, and is intended primarily for research and historical reference.  
+
+Those interested in using the sleep staging classification methods that were developed from this should use the primary, [Stanford-STAGES](https://www.github.com/stanford-stages/stanford-stages) repository.
+
 # sleep-staging
 
 
