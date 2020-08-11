@@ -10,28 +10,28 @@ class SCModel(object):
 
         # Placeholders
 
-        
+
         self._features = tf.placeholder(tf.float32, [None, None, config.num_features], name='ModelInput')
         self._targets = tf.placeholder(tf.float32, [None, config.num_classes], name='ModelOutput')
         self._mask = tf.placeholder(tf.float32, [None], name='ModelWeights')
 
         #self._batch_size = tf.placeholder_with_default(config.batch_size, [1,], name='BatchSize')
-	self._batch_size = tf.placeholder(tf.int32, name='BatchSize')
-	self._learning_rate = tf.placeholder(tf.float32, name='LearningRate')
-	
-        batch_size_int = tf.reshape(self._batch_size, [])      
+	    self._batch_size = tf.placeholder(tf.int32, name='BatchSize')
+	    self._learning_rate = tf.placeholder(tf.float32, name='LearningRate')
+
+        batch_size_int = tf.reshape(self._batch_size, [])
 
 
         if config.lstm:
             self._initial_state = tf.placeholder_with_default(tf.zeros([batch_size_int,config.num_hidden*2],dtype=tf.float32), [None, config.num_hidden*2],name='InitialState')
-	    
+
 
         # Layer in
         with tf.variable_scope('input_hidden') as scope:
-            inputs = self._features    
-            inputs = tf.reshape(inputs, shape=[batch_size_int, -1, config.segsize, config.num_features])  # (time, batch, feat) -> (time*batch, feat)	               
+            inputs = self._features
+            inputs = tf.reshape(inputs, shape=[batch_size_int, -1, config.segsize, config.num_features])  # (time, batch, feat) -> (time*batch, feat)
 
-            
+
         if config.scope=='oct':
             hidden_eeg = sc_conv.main(inputs[:,:,:,:10],config,'eeg',batch_size_int)
             hidden_eog = sc_conv.main(inputs[:,:,:,10:20],config,'eog',batch_size_int)
@@ -39,22 +39,22 @@ class SCModel(object):
         elif config.scope=='ac':
             hidden_eeg = sc_conv.main(inputs[:,:,:,:400],config,'eeg',batch_size_int)
             hidden_eog = sc_conv.main(inputs[:,:,:,400:1600],config,'eog',batch_size_int)
-            hidden_emg = sc_conv.main(inputs[:,:,:,1600:],config,'emg',batch_size_int)            
-	    print('ac')        
-        
-        hidden_combined = tf.concat(2,[hidden_eeg,hidden_eog,hidden_emg])	
+            hidden_emg = sc_conv.main(inputs[:,:,:,1600:],config,'emg',batch_size_int)
+	    print('ac')
+
+        hidden_combined = tf.concat(2,[hidden_eeg,hidden_eog,hidden_emg])
         nHid = hidden_combined.get_shape()
-        
+
         # Regularization
-	
+
         if config.is_training and config.keep_prob < 1.0:
             iKeepProb = config.keep_prob
             oKeepProb = config.keep_prob
         else:
             iKeepProb = 1
             oKeepProb = 1
-	
-			
+
+
         # Layer hidden
         with tf.variable_scope('hidden_hidden') as scope:
             if config.lstm:
@@ -62,15 +62,15 @@ class SCModel(object):
                 cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=iKeepProb, output_keep_prob=oKeepProb)
                 initial_state = tf.nn.rnn_cell.LSTMStateTuple(self._initial_state[:,:config.num_hidden],self._initial_state[:,config.num_hidden:])
                 outputs,final_state = tf.nn.dynamic_rnn(cell, hidden_combined, dtype=tf.float32, initial_state = initial_state)
-                
+
             else:
                 hidden_combined = tf.reshape(hidden_combined, [-1,int(nHid[2])])
                 weights = sc_conv._variable_with_weight_decay('weights', shape=[nHid[2], config.num_hidden],
 													  stddev=0.04, wd=0.00001)
                 biases = sc_conv._variable_on_cpu('biases', config.num_hidden, tf.constant_initializer(0.01))
-                outputs = tf.nn.relu(tf.add(tf.matmul(hidden_combined, weights),biases), name=scope.name)     
+                outputs = tf.nn.relu(tf.add(tf.matmul(hidden_combined, weights),biases), name=scope.name)
                 #sc_conv._activation_summary(outputs)
-                
+
         # Layer out
         with tf.variable_scope('hidden_output') as scope:
             outputs = tf.reshape(outputs, [-1,config.num_hidden])
@@ -79,9 +79,9 @@ class SCModel(object):
             biases = sc_conv._variable_on_cpu('biases', config.num_classes, tf.constant_initializer(0.001))
             logits = tf.add(tf.matmul(outputs, weights), biases, name=scope.name)
             #sc_conv._activation_summary(logits)
-            
+
         # Evaluate
-	
+
         cross_ent = self.intelligent_cost(logits)
         loss = self.gather_loss()
         self._loss = loss
@@ -93,7 +93,7 @@ class SCModel(object):
         self._accuracy = tf.reduce_mean(tf.cast(self._correct, tf.float32))
         self._confidence = tf.reduce_sum(tf.multiply(self._softmax,self._targets),1);
         self._baseline = (tf.reduce_mean(self._targets,0))
-		
+
 	if config.lstm:
 	    self._final_state = tf.concat(1,[final_state.c,final_state.h])
 
@@ -109,39 +109,39 @@ class SCModel(object):
 
         with tf.control_dependencies([optimize, variables_averages_op]):
             self._train_op = tf.no_op(name='train')
-        
+
 
     def intelligent_cost(self, logits):
-        logits = tf.clip_by_value(logits,-1e10,1e+10)	
+        logits = tf.clip_by_value(logits,-1e10,1e+10)
         cross_ent = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self._targets)
         #cross_ent = tf.mul(cross_ent, self._mask)
         cross_ent = tf.reduce_mean(cross_ent)# / tf.reduce_sum(self._mask)
         tf.add_to_collection('losses', cross_ent)
-        
+
         return cross_ent
-        
+
     def gather_loss(self):
-        
+
         loss_averages = tf.train.ExponentialMovingAverage(0.9,name='avg_loss')
         losses = tf.get_collection('losses')
         total_loss = tf.add_n(losses, name='total_loss')
         loss_averages_op = loss_averages.apply(losses + [total_loss])
-        
+
         #for l in losses + [total_loss]:
             # Name each loss as '(raw)' and name the moving average version of the loss
             # as the original loss name.
-        
-        
+
+
         #tf.scalar_summary(total_loss.op.name +' (raw)', total_loss)
         #tf.scalar_summary(total_loss.op.name, loss_averages.average(total_loss))
 
         return total_loss
-    
+
     @property
     def features(self):
         return self._features
 
-    @property	
+    @property
     def final_state(self):
         return self._final_state
 
@@ -151,11 +151,11 @@ class SCModel(object):
     @property
     def targets(self):
         return self._targets
-        
+
     @property
     def mask(self):
         return self._mask
-        
+
     @property
     def batch_size(self):
         return self._batch_size
@@ -170,15 +170,15 @@ class SCModel(object):
     @property
     def loss(self):
         return self._loss
-        
+
     @property
     def cross_ent(self):
         return self._cross_ent
-        
+
     @property
     def accuracy(self):
         return self._accuracy
-     
+
     @property
     def baseline(self):
         return self._baseline
@@ -194,10 +194,10 @@ class SCModel(object):
     @property
     def logits(self):
         return self._logits
-        
+
     @property
     def confidence(self):
-        return self._confidence    
+        return self._confidence
 
     @property
     def ar_prob(self):
