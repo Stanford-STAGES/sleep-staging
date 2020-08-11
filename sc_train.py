@@ -44,7 +44,7 @@ def train(config):
 
 
         m = sc_network.SCModel(config)
-	print('Net configured')
+	    print('Net configured')
         #s = tf.train.Saver(tf.all_variables(), max_to_keep=2)
         s = tf.train.Saver(tf.global_variables(), max_to_keep=2)
         #print(tf.global_variables())
@@ -62,7 +62,7 @@ def train(config):
 
         else:
             #tf.initialize_all_variables().run()
-	    
+
 	    #init = tf.global_variables_initializer()
 	    print('Initializing..')
 	    #session.run(init)
@@ -131,8 +131,3 @@ def train(config):
 
 if __name__ == '__main__':
     tf.app.run()
-
-
-
-
-
