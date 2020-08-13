@@ -72,7 +72,9 @@ def batch_start_jobs(args):
         listF = listed_as_test
     else:
         listF = not_listed + listed_as_train
-    listF = listF[2000:]
+
+    if args.slice:
+        listF = listF[args.slice]
     # random.seed(12345)
     # random.shuffle(listF)
     # n_per_batch = int(np.ceil(len(listF) / n_jobs))
@@ -355,6 +357,7 @@ if __name__ == '__main__':
     parser.add_argument("--encoding_type", type=str, default='cc', choices=['cc', 'raw'])
     parser.add_argument("--mix", action='store_true')
     parser.add_argument("--test", action='store_true')
+    parser.add_argument("--slice", type=lambda s: slice(*[int(e) if e.strip() else None for e in s.split(":")]))
     args = parser.parse_args()
 
     if args.mix:
