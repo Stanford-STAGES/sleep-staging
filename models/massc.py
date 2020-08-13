@@ -134,7 +134,7 @@ class MasscModel(ptl.LightningModule):
 
     def training_step(self, batch, batch_index):
 
-        X, y = batch
+        X, y, _, _ = batch
         # del batch
         y_hat = self.forward(X)
         if torch.isnan(y_hat).any():
@@ -148,7 +148,7 @@ class MasscModel(ptl.LightningModule):
 
     def validation_step(self, batch, batch_index):
 
-        X, y, = batch
+        X, y, _, _ = batch
         # del batch
         y_hat = self.forward(X)
         loss = self.compute_loss(y, y_hat)
@@ -162,6 +162,51 @@ class MasscModel(ptl.LightningModule):
 
         return {'val_loss': torch.stack([x['eval_loss'] for x in outputs]).mean(),
                 'log': {k: torch.stack([x[k] for x in outputs]).mean() for k in outputs[0].keys()}}
+
+    def test_step(self, batch, batch_index):
+
+        X, y, current_record, current_sequence = batch
+        y_hat = self.forward(X)
+
+        return {'predicted': y_hat.softmax(dim=1), 'true': y, 'record': current_record, 'sequence_nr': current_sequence.cpu().numpy()}
+
+    def test_epoch_end(self, output_results):
+        """This method collects the results and sorts the predictions according to record and sequence nr."""
+        results = {r: {
+            'true': [],
+            'true_label': [],
+            'predicted': [],
+            'predicted_label': [],
+            'acc': None,
+            'f1': None,
+            'recall': None,
+            'precision': None} for r in self.test_dataloader.dataloader.dataset.records}
+
+        for r in self.test_dataloader.dataloader.dataset.records:
+            current_record = sorted([v for v in output_results if v['record'][0] == r], key = lambda x: x['sequence_nr'])
+            if not current_record:
+                results.pop(r, None)
+                continue
+            y = torch.cat([v['predicted'] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.n_channels, -1)
+            t = torch.cat([v['true'] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.n_channels, -1)
+            y_label = y.argmax(dim=0)
+            t_label = t.argmax(dim=0)
+            cm = ptl.metrics.ConfusionMatrix()(y_label, t_label)
+            acc = ptl.metrics.Accuracy()(y_label, t_label)
+            f1 = ptl.metrics.F1(reduction='none')(y_label, t_label)
+            precision = ptl.metrics.Precision(reduction='none')(y_label, t_label)
+            recall = ptl.metrics.Recall(reduction='none')(y_label, t_label)
+            results[r]['true'] = t.cpu().numpy()
+            results[r]['true_label'] = t_label.cpu().numpy()
+            results[r]['predicted'] = y.cpu().numpy()
+            results[r]['predicted_label'] = y_label.cpu().numpy()
+            results[r]['acc'] = acc.cpu().numpy()
+            results[r]['cm'] = cm.cpu().numpy()
+            results[r]['f1'] = f1.cpu().numpy()
+            results[r]['precision'] = precision.cpu().numpy()
+            results[r]['recall'] = recall.cpu().numpy()
+
+        return results
 
     def configure_optimizers(self):
 
@@ -237,11 +282,12 @@ class MasscModel(ptl.LightningModule):
         print('Eval dataset length: ', len(self.eval_data))
 
     def on_post_performance_check(self):
-        self.train_data, self.eval_data = self.dataset.split_data(self.eval_ratio)
-        # print(self.train_data)
-        # print(self.eval_data)
-        print('End of epoch, shuffling training and validation data')
-        print(self.eval_data)
+        if not self.testing == '1':
+            self.train_data, self.eval_data = self.dataset.split_data(self.eval_ratio)
+            # print(self.train_data)
+            # print(self.eval_data)
+            print('End of epoch, shuffling training and validation data')
+            print(self.eval_data)
 
     @staticmethod
     def add_model_specific_args(parent_parser):
