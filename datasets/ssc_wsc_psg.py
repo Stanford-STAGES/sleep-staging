@@ -1,6 +1,7 @@
 import math
 import os
 import random
+from itertools import compress
 
 import numpy as np
 import torch
@@ -102,7 +103,7 @@ class SscWscPsgDataset(Dataset):
         if np.isnan(x).any():
             print('NaNs detected!')
 
-        return x, t
+        return x, t, current_record, current_sequence
 
     def __str__(self):
         s = f"""
@@ -139,9 +140,13 @@ class SscWscPsgSubset(Dataset):
     def __init__(self, dataset, record_indices, name='Train'):
         self.dataset = dataset
         self.record_indices = record_indices
-        self.records = [self.dataset.records[idx] for idx in self.record_indices]
-        self.sequence_indices = [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
         self.name = name
+        self.records = [self.dataset.records[idx] for idx in self.record_indices]
+        self.sequence_indices = self.__get_subset_indices()# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
+
+    def __get_subset_indices(self):
+        t = list(map(lambda x: x['record'] in self.records, self.dataset.index_to_record))
+        return list(compress(range(len(t)), t))
 
     def __getitem__(self, idx):
         return self.dataset[self.sequence_indices[idx]]
