@@ -177,10 +177,11 @@ class MasscModel(ptl.LightningModule):
             'true_label': [],
             'predicted': [],
             'predicted_label': [],
-            'acc': None,
-            'f1': None,
-            'recall': None,
-            'precision': None} for r in self.test_dataloader.dataloader.dataset.records}
+            # 'acc': None,
+            # 'f1': None,
+            # 'recall': None,
+            # 'precision': None,
+        } for r in self.test_dataloader.dataloader.dataset.records}
 
         for r in self.test_dataloader.dataloader.dataset.records:
             current_record = sorted([v for v in output_results if v['record'][0] == r], key = lambda x: x['sequence_nr'])
@@ -191,20 +192,20 @@ class MasscModel(ptl.LightningModule):
             t = torch.cat([v['true'] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.n_channels, -1)
             y_label = y.argmax(dim=0)
             t_label = t.argmax(dim=0)
-            cm = ptl.metrics.ConfusionMatrix()(y_label, t_label)
-            acc = ptl.metrics.Accuracy()(y_label, t_label)
-            f1 = ptl.metrics.F1(reduction='none')(y_label, t_label)
-            precision = ptl.metrics.Precision(reduction='none')(y_label, t_label)
-            recall = ptl.metrics.Recall(reduction='none')(y_label, t_label)
+            # cm = ptl.metrics.ConfusionMatrix()(y_label, t_label)
+            # acc = ptl.metrics.Accuracy()(y_label, t_label)
+            # f1 = ptl.metrics.F1(reduction='none')(y_label, t_label)
+            # precision = ptl.metrics.Precision(reduction='none')(y_label, t_label)
+            # recall = ptl.metrics.Recall(reduction='none')(y_label, t_label)
             results[r]['true'] = t.cpu().numpy()
             results[r]['true_label'] = t_label.cpu().numpy()
             results[r]['predicted'] = y.cpu().numpy()
             results[r]['predicted_label'] = y_label.cpu().numpy()
-            results[r]['acc'] = acc.cpu().numpy()
-            results[r]['cm'] = cm.cpu().numpy()
-            results[r]['f1'] = f1.cpu().numpy()
-            results[r]['precision'] = precision.cpu().numpy()
-            results[r]['recall'] = recall.cpu().numpy()
+            # results[r]['acc'] = acc.cpu().numpy()
+            # results[r]['cm'] = cm.cpu().numpy()
+            # results[r]['f1'] = f1.cpu().numpy()
+            # results[r]['precision'] = precision.cpu().numpy()
+            # results[r]['recall'] = recall.cpu().numpy()
 
         return results
 
