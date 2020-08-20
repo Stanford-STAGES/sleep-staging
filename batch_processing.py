@@ -74,7 +74,10 @@ def batch_start_jobs(args):
             continue
     list_files = listF
     if args.test:
-        listF = listed_as_test
+        if listed_as_test:
+            listF = listed_as_test
+        else:
+            listF = not_listed
     else:
         listF = not_listed + listed_as_train
 
@@ -95,7 +98,7 @@ def batch_start_jobs(args):
 #SBATCH --job-name="{os.path.basename(current_file)}"
 #SBATCH -p mignot,owners,normal
 #SBATCH --time=00:05:00
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=2
 #SBATCH --output="/home/users/alexno/sleep-staging/batch/logs/{subset}/{encoding_type}/{os.path.basename(current_file)}.out"
 #SBATCH --error="/home/users/alexno/sleep-staging/batch/logs/{subset}/{encoding_type}/{os.path.basename(current_file)}.err"
 ##################################################
@@ -117,9 +120,7 @@ def batch_process_and_save(current_file, fs, seq_len, overlap, subset, encoding_
     import traceback
 
     try:
-        M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(
-            current_file, fs, seq_len, overlap, encoding=encoding_type
-        )
+        M, L, W, _, _ = process_single_file(current_file, fs, seq_len, overlap, encoding=encoding_type)
     except MissingHypnogramError as err:
         missing_path = f"./batch/{subset}/{encoding_type}/missing_hyp"
         if not os.path.exists(missing_path):
@@ -155,13 +156,13 @@ def batch_process_and_save(current_file, fs, seq_len, overlap, subset, encoding_
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     save_name = os.path.join(save_dir, os.path.basename(current_file).split(".")[0] + ".h5")
-    if encoding_type == "raw":
-        chunks_M = (1, M.shape[1], M.shape[2])
-        chunks_L = (1, L.shape[1], L.shape[2])
-    elif encoding_type == "cc":
-        chunks_M = (M.shape[0], M.shape[1], 1)
-        chunks_L = (L.shape[0], L.shape[1], 1)
-        chunks_W = (W.shape[0], 1)
+    chunks_M = (1,) + M.shape[1:]  # M.shape[1], M.shape[2])
+    chunks_L = (1,) + L.shape[1:]  # (1, L.shape[1], L.shape[2])
+    if W is not None:
+        chunks_W = (1,) + W.shape[1:]
+        # chunks_M = (M.shape[0], M.shape[1], 1)
+        # chunks_L = (L.shape[0], L.shape[1], 1)
+        # chunks_W = (W.shape[0], 1)
     with File(save_name, "w") as f:
         f.create_dataset("M", data=M, chunks=chunks_M)
         f.create_dataset("L", data=L, chunks=chunks_L)
@@ -173,9 +174,7 @@ def batch_process_and_save_raw(current_file, fs, seq_len, overlap, subset, encod
     import traceback
 
     try:
-        M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(
-            current_file, fs, seq_len, overlap, encoding=encoding_type
-        )
+        M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(current_file, fs, seq_len, overlap, encoding=encoding_type)
     except MissingHypnogramError as err:
         missing_path = f"./batch/{subset}/{encoding_type}/missing_hyp"
         if not os.path.exists(missing_path):
@@ -434,6 +433,6 @@ if __name__ == "__main__":
         batch_mix_encodings(args)
     else:
         batch_start_jobs(args)
-        # batch_process_and_save('/oak/stanford/groups/mignot/psg/Korea (KHC)/SOMNO/06985471.edf', 100, 1200, 400, 'test', 'cc')
-        # batch_process_and_save_raw("/oak/stanford/groups/mignot/psg/SSC/APOE/SSC_1958_1.EDF", 128, 10, 0, 'test')
+        # batch_process_and_save("/oak/stanford/groups/mignot/psg/ISRC/AL_36_112108.edf", 100, 1200, 0, "test", "cc")
+        # batch_process_and_save("/oak/stanford/groups/mignot/psg/SSC/APOE/SSC_1958_1.EDF", 128, 10, 0, "test", "raw")
     # batch_process_and_save_encoding('/oak/stanford/groups/mignot/psg/SSC/APOE/SSC_1558_1.EDF', 100, 1200, 400)
