@@ -101,6 +101,13 @@ def load_scored_data(sta_file):
     try:
         with open(sta_file, "r") as fp:
             _hyp = np.loadtxt(fp)[:, 1].astype(np.uint32)[:, np.newaxis]
+    except ValueError:
+        with open(sta_file, "r") as fp:
+            _hyp = np.loadtxt(fp, delimiter=",")
+            if _hyp.shape[1] == 6:  # This is for the multi-scorer case in ISRC
+                _hyp = _hyp.astype(np.uint32)
+            else:
+                _hyp = _hyp[:, 1].astype(np.uint32)[:, np.newaxis]
     except FileNotFoundError:
         return None
     hyp = np.zeros(_hyp.shape, dtype=np.uint32)
@@ -111,7 +118,7 @@ def load_scored_data(sta_file):
     hyp[_hyp == 4] = 4
     hyp[_hyp == 5] = 5
     hyp[hyp == 0] = 7
-    hyp = np.concatenate([hyp, np.ones((2000, 1), dtype=np.uint32) * 7], axis=0)
+    hyp = np.concatenate([hyp, np.ones((2000, hyp.shape[1]), dtype=np.uint32) * 7], axis=0)
 
     return hyp
 
@@ -140,7 +147,6 @@ def load_signals(edf_file, fs):
     temp_data, data_headers, file_header = highlevel.read_edf(edf_file, ch_nrs=list(ind[loaded]))
     loaded_channels = np.asarray(header["channels"])[ind[loaded]].tolist()
 
-    # TODO: fix referencing code
     # This tests for central left EEG
     if ind[1] != -1:
         c3_idx = np.where(ind[loaded] == ind[1])[0].item()
@@ -265,20 +271,20 @@ def load_signals(edf_file, fs):
     for idx, orig_fs in enumerate(cFs):
         if orig_fs != fs:
             data[idx] = signal.upfirdn(
-                filter_specs[fs][orig_fs]["numerator"],
+                filter_specs[str(fs)][str(orig_fs)]["numerator"],
                 temp_data[idx],
-                filter_specs[fs][orig_fs]["up"],
-                filter_specs[fs][orig_fs]["down"],
+                filter_specs[str(fs)][str(orig_fs)]["up"],
+                filter_specs[str(fs)][str(orig_fs)]["down"],
             )
             if fs == 100:
                 if (
                     orig_fs == 256 or orig_fs == 512
                 ):  # Matlab creates a filtercascade which requires the 128 Hz filter be applied afterwards
                     data[idx] = signal.upfirdn(
-                        filter_specs[fs][128]["numerator"],
+                        filter_specs[str(fs)]["128"]["numerator"],
                         data[idx],
-                        filter_specs[fs][128]["up"],
-                        filter_specs[fs][128]["down"],
+                        filter_specs[str(fs)]["128"]["up"],
+                        filter_specs[str(fs)]["128"]["down"],
                     )
         else:
             data[idx] = temp_data[idx]
@@ -301,16 +307,10 @@ def load_signals(edf_file, fs):
     keep_idx_occipital = get_quiet_channel([data[j] for j in occipital_list], fs, meanV[1], covM[1])
     # Select only kept channels
     data = np.concatenate(
-        [
-            data[central_list[keep_idx_central]][np.newaxis, :],
-            data[occipital_list[keep_idx_occipital]][np.newaxis, :],
-            data[-3:],
-        ]
+        [data[central_list[keep_idx_central]][np.newaxis, :], data[occipital_list[keep_idx_occipital]][np.newaxis, :], data[-3:],]
     )
     channel_labels = (
-        [channel_labels[central_list[keep_idx_central]]]
-        + [channel_labels[occipital_list[keep_idx_occipital]]]
-        + channel_labels[-3:]
+        [channel_labels[central_list[keep_idx_central]]] + [channel_labels[occipital_list[keep_idx_occipital]]] + channel_labels[-3:]
     )
 
     return data
@@ -407,13 +407,7 @@ def encode_data(x1, x2, dim, slide, fs):
     # while True:
     #     start = time()
     C = fftshift(
-        np.real(
-            ifft(
-                fft(D1, dim * 2 - 1, axis=0, workers=-1) * np.conj(fft(D2, dim * 2 - 1, axis=0, workers=-1)),
-                axis=0,
-                workers=-2,
-            )
-        ),
+        np.real(ifft(fft(D1, dim * 2 - 1, axis=0, workers=-1) * np.conj(fft(D2, dim * 2 - 1, axis=0, workers=-1)), axis=0, workers=-2,)),
         axes=0,
     ).astype(dtype=np.float32)
     # print(time() - start)
@@ -536,9 +530,9 @@ def process_single_file(current_file, fs, seq_len, overlap, encoding="cc"):
     # if sig is None:
     # print("Skipping due to missing signals")
     # return None, None, None, None, 1
-    hyp = hyp[: len(sig[0]) // (fs * 30), 0]
-    label = np.tile(hyp.squeeze(), (120, 1))
-    label = label.T.flatten()
+    hyp = hyp[: len(sig[0]) // (fs * 30), :]
+    label = np.tile(hyp, (120, 1))
+    # label = label.T.flatten()  # Why is this here...?
 
     # Filter signals
     wH = 0.2 / (fs / 2)
@@ -546,9 +540,7 @@ def process_single_file(current_file, fs, seq_len, overlap, encoding="cc"):
     bH, aH = signal.butter(5, wH, btype="high", output="ba")
     bL, aL = signal.butter(5, wL, btype="low", output="ba")
     sig = signal.filtfilt(bH, aH, sig, padlen=3 * (max(len(bH), len(aH)) - 1))
-    sig = signal.filtfilt(bL, aL, sig, padlen=3 * (max(len(bL), len(aL)) - 1)).astype(
-        np.float32
-    )  # These should match MATLAB output
+    sig = signal.filtfilt(bL, aL, sig, padlen=3 * (max(len(bL), len(aL)) - 1)).astype(np.float32)  # These should match MATLAB output
     # sig = signal.sosfiltfilt(sosH, sig)
     # sig = signal.sosfiltfilt(sosL, sig).astype(np.float32)
     # sig = sig.astype(np.float32)
@@ -563,56 +555,67 @@ def process_single_file(current_file, fs, seq_len, overlap, encoding="cc"):
         # Trim excess
         C = np.concatenate([enc[:, : np.size(encodings[-1], 1)] for enc in encodings])
         label = label[: C.shape[1]]
-        C = np.delete(C, np.where(label == 7)[0], axis=1)
-        label = np.delete(label, np.where(label == 7)[0])
-        hyp = np.delete(hyp, np.where(hyp == 7)[0])
+        if label.shape[1] > 1:
+            delete_idx = []
+        else:
+            delete_idx = np.where(label == 7)[0]
+        C = np.delete(C, delete_idx, axis=1)
+        label = np.delete(label, delete_idx, axis=0)
+        if hyp.shape[1] > 1:
+            delete_idx = []
+        else:
+            delete_idx = np.where(hyp == 7)[0]
+        hyp = np.delete(hyp, delete_idx, axis=0)
 
         # Design labels
-        labels = np.zeros((5, len(label)))
+        labels = np.zeros((5,) + label.shape).astype(np.uint8)
         for j in range(5):
             labels[j, label == j + 1] = 1
         index = skimage.util.view_as_windows(np.arange(C.shape[1]), seq_len, seq_len - overlap)
-        M = np.stack([C[:, j] for j in index], axis=-1)
-        L = np.stack([labels[:, j] for j in index], axis=-1)
+        M = np.stack([C[:, j] for j in index], axis=0)
+        L = np.stack([labels[:, j] for j in index], axis=0)
 
         # Adjust weights depending on stage
-        hyp = np.repeat(hyp, 2)
-        mask = np.zeros(hyp.shape)
-        dhyp = np.abs(np.sign(np.diff(hyp)))
-        mask[: len(dhyp)] = mask[: len(dhyp)] + dhyp
-        mask[1 : len(dhyp) + 1] = mask[1 : len(dhyp) + 1] + dhyp
-        mask = (1 - mask).astype(np.float32)
-        weight = np.zeros(hyp.shape)
-        weight[hyp == 1] = 1.5
-        weight[hyp == 2] = 2
-        weight[hyp == 3] = 1
-        weight[hyp == 4] = 2.5
-        weight[hyp == 5] = 2
-        weight *= mask
-        weight = np.repeat(weight, 60)
+        if hyp.shape[1] == 1:
+            hyp = np.repeat(hyp, 2)
+            mask = np.zeros(hyp.shape)
+            dhyp = np.abs(np.sign(np.diff(hyp)))
+            mask[: len(dhyp)] = mask[: len(dhyp)] + dhyp
+            mask[1 : len(dhyp) + 1] = mask[1 : len(dhyp) + 1] + dhyp
+            mask = (1 - mask).astype(np.float32)
+            weight = np.zeros(hyp.shape)
+            weight[hyp == 1] = 1.5
+            weight[hyp == 2] = 2
+            weight[hyp == 3] = 1
+            weight[hyp == 4] = 2.5
+            weight[hyp == 5] = 2
+            weight *= mask
+            weight = np.repeat(weight, 60)
 
-        W = np.stack([weight[j] for j in index], axis=-1)
+            W = np.stack([weight[j] for j in index], axis=-1)
+        else:
+            W = None
 
     elif encoding == "raw":
+        # fmt: off
 
         # Trim excess
         C = np.stack([rolling_window_nodelay(s, 30 * fs, 30 * fs) for s in sig])
-        C = np.delete(C, np.where(hyp == 7)[0], axis=-1)
-        hyp = np.delete(hyp, np.where(hyp == 7)[0])
+        C = np.delete(C, np.where(hyp[:, 0] == 7)[0], axis=-1)
+        hyp = np.delete(hyp, np.where(hyp[:, 0] == 7)[0], axis=0)
 
         # Design labels
-        labels = np.zeros((5, len(hyp)))
+        labels = np.zeros((5, hyp.shape[0], hyp.shape[1])).astype(np.uint32)
         for j in range(5):
             labels[j, hyp == j + 1] = 1
         index = skimage.util.view_as_windows(np.arange(C.shape[-1]), seq_len, seq_len - overlap)
         M = np.stack([C[:, :, j] for j in index], axis=0)
         M = np.swapaxes(M, 2, 3).reshape((M.shape[0], M.shape[1], -1))
-        L = np.stack([labels[:, j] for j in index], axis=0).repeat(
-            30, axis=-1
-        )  # (Number of sequences, number of classes, hypnogram value for each second in sequence)
+        L = np.stack([labels[:, j] for j in index], axis=0).repeat(30, axis=2)  # (Number of sequences, number of classes, hypnogram value for each second in sequence)
 
         W = None
 
+        # fmt: on
     return M, L, W, None, None
 
 
@@ -683,9 +686,7 @@ def process_data(args):
 
             pbar.set_description(current_file)
 
-            M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(
-                current_file, fs, seq_len, overlap, encoding
-            )
+            M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(current_file, fs, seq_len, overlap, encoding)
             if is_missing_hyp:
                 missing_hyp.append(current_file)
                 continue
