@@ -15,7 +15,8 @@ from torch.utils.data import Dataset
 from torch.utils.data import Subset
 from tqdm import tqdm
 
-from utils import ParallelExecutor, load_h5_data
+from utils import ParallelExecutor
+from utils import load_h5_data
 
 
 def load_psg_h5_data(filename):
