@@ -22,7 +22,7 @@ def evaluate_performance(record_predictions, evaluation_windows=[1, 3, 5, 10, 15
     records = [r for r in record_predictions.keys()]
     ids = [r.split(".")[0] for r in records]
     df_total = []
-    confmat_subject = {fid: {eval_window: None for eval_window in evaluation_windows} for fid in records}
+    confmat_subject = {record: {eval_window: None for eval_window in evaluation_windows} for record in records}
     confmat_total = {eval_window: np.zeros((5, 5)) for eval_window in evaluation_windows}
     for eval_window in evaluation_windows:
         df = pd.DataFrame()
@@ -65,7 +65,7 @@ def evaluate_performance(record_predictions, evaluation_windows=[1, 3, 5, 10, 15
 
             # Get confusion matrix
             C = confusion_matrix(t, p, labels=[0, 1, 2, 3, 4])
-            confmat_subject[fid][eval_window] = C
+            confmat_subject[record][eval_window] = C
             confmat_total[eval_window] += C
 
         # Update list
