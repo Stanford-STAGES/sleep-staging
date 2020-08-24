@@ -21,10 +21,10 @@ class MasscModel(ptl.LightningModule):
         self.__dict__.update(kwargs)
         self.hparams = kwargs
         self.metrics = {
-            'accuracy': Accuracy(self.n_classes, reduce_op='mean'),
-            'f1': F1(self.n_classes, reduce_op='mean'),
-            'precision': Precision(self.n_classes, reduce_op='mean'),
-            'recall': Recall(self.n_classes, reduce_op='mean'),
+            'accuracy': Accuracy(reduce_op='mean'),
+            'f1': F1(reduce_op='mean'),
+            'precision': Precision(reduce_op='mean'),
+            'recall': Recall(reduce_op='mean'),
         }
         self.example_input_array = torch.zeros(self.batch_size, 5, 5 * 60 * 128)
 
@@ -182,9 +182,10 @@ class MasscModel(ptl.LightningModule):
             # 'recall': None,
             # 'precision': None,
         } for r in self.test_dataloader.dataloader.dataset.records}
+        print('Eyoooo')
 
         for r in self.test_dataloader.dataloader.dataset.records:
-            current_record = sorted([v for v in output_results if v['record'][0] == r], key = lambda x: x['sequence_nr'])
+            current_record = sorted([v for v in output_results if v['record'][0] == r], key=lambda x: x['sequence_nr'])
             if not current_record:
                 results.pop(r, None)
                 continue
@@ -241,15 +242,15 @@ class MasscModel(ptl.LightningModule):
                     dict(base_lr=self.base_lr, max_lr=self.max_lr, step_size_up=self.step_size_up)
                 )
                 scheduler = {'scheduler': torch.optim.lr_scheduler.CyclicLR(optimizer, **self.scheduler_params),
-                            'interval': 'step',
-                            'frequency': 1, # self.steps_per_file,
-                            'name': 'lr_schedule'}
+                             'interval': 'step',
+                             'frequency': 1,  # self.steps_per_file,
+                             'name': 'lr_schedule'}
             elif self.lr_scheduler == 'reduce_on_plateau':
                 self.scheduler_params.update(
                     dict(factor=self.lr_reduce_factor, patience=self.lr_reduce_patience)
                 )
                 scheduler = {'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, **self.scheduler_params),
-                            'name': 'learning_rate'}
+                             'name': 'learning_rate'}
             else:
                 raise NotImplementedError
 
@@ -282,13 +283,13 @@ class MasscModel(ptl.LightningModule):
         print('Train dataset length: ', len(self.train_data))
         print('Eval dataset length: ', len(self.eval_data))
 
-    def on_post_performance_check(self):
-        if not self.testing == '1':
-            self.train_data, self.eval_data = self.dataset.split_data(self.eval_ratio)
-            # print(self.train_data)
-            # print(self.eval_data)
-            print('End of epoch, shuffling training and validation data')
-            print(self.eval_data)
+    # def on_post_performance_check(self):
+    #     if not self.testing == '1':
+    #         self.train_data, self.eval_data = self.dataset.split_data(self.eval_ratio)
+    #         # print(self.train_data)
+    #         # print(self.eval_data)
+    #         print('End of epoch, shuffling training and validation data')
+    #         print(self.eval_data)
 
     @staticmethod
     def add_model_specific_args(parent_parser):

@@ -1,7 +1,9 @@
 from .massc import MasscModel
+from .massc_v2 import MasscV2Model
 from .stages import StagesModel
 
 __all__ = [
-    'MasscModel',
-    'StagesModel',
+    "MasscModel",
+    "MasscV2Model",
+    "StagesModel",
 ]
