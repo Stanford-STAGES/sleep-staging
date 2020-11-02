@@ -181,7 +181,10 @@ class MasscModel(ptl.LightningModule):
 
     def compute_metrics(self, y, y_hat):
         softmax = F.softmax(y_hat, dim=1)
-        metrics = {metric: metric_fn(softmax.argmax(dim=1), y.argmax(dim=1)) for metric, metric_fn in self.metrics.items()}
+        self.train_acc(softmax.argmax(dim=1), y.argmax(dim=1))
+        # metrics = {
+        #     metric: metric_fn(softmax.argmax(dim=1), y.argmax(dim=1)) for metric, metric_fn in self.metrics.items()
+        # }
         # metrics = {'_'.join([k, stage]): per_class_metrics[k][idx] for k in ['f1', 'precision', 'recall'] for idx, stage in enumerate(['w', 'n1', 'n2', 'n3', 'rem'])}
         # metrics.update({k: v.mean() for k, v in per_class_metrics.items()})
         # metrics['accuracy'] = per_class_metrics['accuracy'].mean()
