@@ -247,15 +247,33 @@ class MasscModel(ptl.LightningModule):
 
     def validation_step(self, batch, batch_index):
 
-        X, y, _, _ = batch
+        # X, y, _, _, mask = batch
         # del batch
-        y_hat = self.forward(X)
-        loss = self.compute_loss(y, y_hat)
-        metrics = {'_'.join(['eval', k]): v for k, v in self.compute_metrics(y, y_hat).items()}
+        # y_hat = self.forward(X)
+        # loss = self.compute_loss(y.transpose(2, 1)[mask], y_hat.transpose(2, 1)[mask])
+        # metrics = {"_".join(["eval", k]): v for k, v in self.compute_metrics(y.transpose(2, 1)[mask], y_hat.transpose(2, 1)[mask]).items()}
 
-        return {**dict(eval_loss=loss), **metrics}
+        # loss = self.compute_loss(y, y_hat)
+        # metrics = {"_".join(["eval", k]): v for k, v in self.compute_metrics(y, y_hat).items()}
+
+        # return {**dict(eval_loss=loss), **metrics}
         # return {'eval_loss': loss}.update({'_'.join(['eval', k]): v for k, v in metrics.items()})
         # return {'val_loss': loss, 'val_acc': acc, 'val_baseline': baseline}
+        X, y, current_record, current_sequence, stable_sleep = batch
+        loss, y_hat = self.shared_step(X, y, stable_sleep)
+        self.log('eval_loss', loss, on_epoch=True, prog_bar=True, logger=True)
+        # result = ptl.EvalResult(checkpoint_on=loss)
+        # result.log('eval_loss', loss, prog_bar=True, sync_dist=True) # log every epoch
+        # result.log_dict(metrics, sync_dist=True) # log every epoch
+        # return {'current_record'}
+
+        return {
+            "predicted": y_hat.softmax(dim=1),
+            "true": y,
+            "record": current_record,
+            "sequence_nr": current_sequence,
+            "stable_sleep": stable_sleep,
+        }
 
     def validation_epoch_end(self, outputs):
 
