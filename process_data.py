@@ -307,10 +307,16 @@ def load_signals(edf_file, fs):
     keep_idx_occipital = get_quiet_channel([data[j] for j in occipital_list], fs, meanV[1], covM[1])
     # Select only kept channels
     data = np.concatenate(
-        [data[central_list[keep_idx_central]][np.newaxis, :], data[occipital_list[keep_idx_occipital]][np.newaxis, :], data[-3:],]
+        [
+            data[central_list[keep_idx_central]][np.newaxis, :],
+            data[occipital_list[keep_idx_occipital]][np.newaxis, :],
+            data[-3:],
+        ]
     )
     channel_labels = (
-        [channel_labels[central_list[keep_idx_central]]] + [channel_labels[occipital_list[keep_idx_occipital]]] + channel_labels[-3:]
+        [channel_labels[central_list[keep_idx_central]]]
+        + [channel_labels[occipital_list[keep_idx_occipital]]]
+        + channel_labels[-3:]
     )
 
     return data
@@ -407,7 +413,13 @@ def encode_data(x1, x2, dim, slide, fs):
     # while True:
     #     start = time()
     C = fftshift(
-        np.real(ifft(fft(D1, dim * 2 - 1, axis=0, workers=-1) * np.conj(fft(D2, dim * 2 - 1, axis=0, workers=-1)), axis=0, workers=-2,)),
+        np.real(
+            ifft(
+                fft(D1, dim * 2 - 1, axis=0, workers=-1) * np.conj(fft(D2, dim * 2 - 1, axis=0, workers=-1)),
+                axis=0,
+                workers=-2,
+            )
+        ),
         axes=0,
     ).astype(dtype=np.float32)
     # print(time() - start)
@@ -531,21 +543,26 @@ def process_single_file(current_file, fs, seq_len, overlap, encoding="cc"):
     # print("Skipping due to missing signals")
     # return None, None, None, None, 1
     hyp = hyp[: len(sig[0]) // (fs * 30), :]
-    label = np.tile(hyp, (120, 1))
-    # label = label.T.flatten()  # Why is this here...?
 
-    # Filter signals
-    wH = 0.2 / (fs / 2)
-    wL = 49 / (fs / 2)
-    bH, aH = signal.butter(5, wH, btype="high", output="ba")
-    bL, aL = signal.butter(5, wL, btype="low", output="ba")
-    sig = signal.filtfilt(bH, aH, sig, padlen=3 * (max(len(bH), len(aH)) - 1))
-    sig = signal.filtfilt(bL, aL, sig, padlen=3 * (max(len(bL), len(aL)) - 1)).astype(np.float32)  # These should match MATLAB output
     # sig = signal.sosfiltfilt(sosH, sig)
     # sig = signal.sosfiltfilt(sosL, sig).astype(np.float32)
     # sig = sig.astype(np.float32)
 
     if encoding == "cc":
+
+        label = np.tile(hyp, (120, 1))
+        # label = label.T.flatten()  # Why is this here...?
+
+        # Filter signals
+        wH = 0.2 / (fs / 2)
+        wL = 49 / (fs / 2)
+        bH, aH = signal.butter(5, wH, btype="high", output="ba")
+        bL, aL = signal.butter(5, wL, btype="low", output="ba")
+        sig = signal.filtfilt(bH, aH, sig, padlen=3 * (max(len(bH), len(aH)) - 1))
+        sig = signal.filtfilt(bL, aL, sig, padlen=3 * (max(len(bL), len(aL)) - 1)).astype(
+            np.float32
+        )  # These should match MATLAB output
+
         # Do encoding
         encodings = []
         for ch, cc_size in zip(sig, cc_sizes):
@@ -595,28 +612,47 @@ def process_single_file(current_file, fs, seq_len, overlap, encoding="cc"):
             W = np.stack([weight[j] for j in index], axis=-1)
         else:
             W = None
+            Z = None
 
     elif encoding == "raw":
+
+        # Filter signals
+        eegFilter = signal.butter(2, [0.3, 35], btype="bandpass", output="sos", fs=fs)
+        emgFilter = signal.butter(4, 10, btype="highpass", output="sos", fs=fs)
+        sig[:4] = signal.sosfiltfilt(eegFilter, sig[:4])
+        sig[-1] = signal.sosfiltfilt(emgFilter, sig[-1])
+        sig = sig.astype(np.float32)
         # fmt: off
 
         # Trim excess
         C = np.stack([rolling_window_nodelay(s, 30 * fs, 30 * fs) for s in sig])
-        C = np.delete(C, np.where(hyp[:, 0] == 7)[0], axis=-1)
-        hyp = np.delete(hyp, np.where(hyp[:, 0] == 7)[0], axis=0)
+
+        # C = np.delete(C, np.where(hyp[:, 0] == 7)[0], axis=-1)
+        # hyp = np.delete(hyp, np.where(hyp[:, 0] == 7)[0], axis=0)
 
         # Design labels
         labels = np.zeros((5, hyp.shape[0], hyp.shape[1])).astype(np.uint32)
         for j in range(5):
             labels[j, hyp == j + 1] = 1
-        index = skimage.util.view_as_windows(np.arange(C.shape[-1]), seq_len, seq_len - overlap)
+
+        # Mask vector to account for unknown stages (7), or anything else that should be excluded in the loss calculations
+        Z = np.full(hyp.shape, False, dtype=bool)
+        Z[np.where(hyp == 7)] = True  # Unknown stage 7
+
+        # Create a rolling window index vector (for overlapping windows)
+        # index = skimage.util.view_as_windows(np.arange(C.shape[-1]), seq_len, seq_len - overlap)
+        index = rolling_window_nodelay(np.arange(C.shape[-1]), seq_len, seq_len - overlap).T
+
+        # Create stacked arrays
         M = np.stack([C[:, :, j] for j in index], axis=0)
         M = np.swapaxes(M, 2, 3).reshape((M.shape[0], M.shape[1], -1))
         L = np.stack([labels[:, j] for j in index], axis=0).repeat(30, axis=2)  # (Number of sequences, number of classes, hypnogram value for each second in sequence)
+        Z = np.stack([Z[j] for j in index], axis=0)
 
         W = None
 
         # fmt: on
-    return M, L, W, None, None
+    return M, L, W, Z, None, None
 
 
 def process_data(args):
@@ -686,7 +722,9 @@ def process_data(args):
 
             pbar.set_description(current_file)
 
-            M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(current_file, fs, seq_len, overlap, encoding)
+            M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(
+                current_file, fs, seq_len, overlap, encoding
+            )
             if is_missing_hyp:
                 missing_hyp.append(current_file)
                 continue
