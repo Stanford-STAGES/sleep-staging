@@ -130,6 +130,18 @@ class MasscModel(ptl.LightningModule):
         # self.register_buffer('loss_weights', torch.Tensor(self.hparams.cb_weights))
         # self.loss = nn.CrossEntropyLoss(weight=self.loss_weights)
         self.loss = nn.CrossEntropyLoss(weight=torch.Tensor(self.hparams.cb_weights))
+
+        # Dataset params
+        self.dataset_params = dict(
+            data_dir=self.hparams.data_dir,
+            n_jobs=self.hparams.n_jobs,
+            n_records=self.hparams.n_records,
+            scaling=self.hparams.scaling,
+            adjustment=self.hparams.adjustment,
+        )
+
+        # fmt: on
+
     def forward(self, x):
         if self.temporal_block:
             self.temporal_block.flatten_parameters()
