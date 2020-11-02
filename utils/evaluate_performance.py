@@ -91,7 +91,8 @@ def evaluate_performance(record_predictions, evaluation_windows=[1, 3, 5, 10, 15
     # Finalize dataframe
     df_total = pd.concat(df_total)
 
-    return df_total
+    return df_total, confmat_subject, confmat_total
+    # fmt: on
 
     # metrics = {
     #     "record": records,
