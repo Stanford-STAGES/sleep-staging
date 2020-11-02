@@ -205,9 +205,45 @@ class MasscModel(ptl.LightningModule):
             print(err)
 
         return loss, y_hat
-        # logs = {'train_loss': loss, 'train_acc': acc, 'train_baseline': baseline}
 
-        return {'loss': loss, 'log': {**dict(train_loss=loss), **metrics}}
+    def training_step(self, batch, batch_index):
+
+        # X, y, _, _, mask = batch
+        # # del batch
+        # y_hat = self.forward(X)
+        # if torch.isnan(y_hat).any():
+        #     print("Bug!")
+        # # loss = self.compute_loss(y, y_hat)
+        # loss = self.compute_loss(y.transpose(2, 1)[mask], y_hat.transpose(2, 1)[mask])
+        # metrics = {
+        #     "_".join(["train", k]): v for k, v in self.compute_metrics(y.transpose(2, 1)[mask], y_hat.transpose(2, 1)[mask]).items()
+        # }
+        # self.log('train_loss', loss, on)
+        # logs = {'train_loss': loss, 'train_acc': acc, 'train_baseline': baseline}
+        # return {"loss": loss, "log": {**dict(train_loss=loss), **metrics}}
+        X, y, current_record, current_sequence, stable_sleep = batch
+        loss, y_hat = self.shared_step(X, y, stable_sleep)
+        self.compute_metrics(y.transpose(2, 1)[stable_sleep], y_hat.transpose(2, 1)[stable_sleep])
+        # self.train_acc()
+        # metrics = self.compute_metrics(y.transpose(2, 1)[stable_sleep], y_hat.transpose(2, 1)[stable_sleep])
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_acc', self.train_acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        return loss
+
+        # metrics = {}
+        # ptl Results is currently buggy, waiting for PTL 1.0 to change this
+        # result = ptl.TrainResult(loss)
+        # result.log('train_loss', loss, prog_bar=True, on_epoch=True, sync_dist=True) # Logs every step and epoch
+        # result.prediction = y_hat.softmax(dim=1)
+        # result.true = y
+        # result.current_record = current_record
+        # result.current_sequence = current_sequence
+        # result.log_dict(metrics, sync_dist=True) # Logs every epoch
+        # return result
+        # return {'loss': loss, 'log': {'train_loss': loss, **metrics}}
+
+    # def train_epoch_end(self, output):
+    #     return output
 
     def validation_step(self, batch, batch_index):
 
