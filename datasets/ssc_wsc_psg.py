@@ -168,7 +168,104 @@ First ten records: {self.records[:10]}
         return s
 
 
-if __name__ == '__main__':
+class SscWscDataModule(pl.LightningDataModule):
+    def __init__(
+        self,
+        batch_size,
+        cv=None,
+        cv_idx=None,
+        data_dir=None,
+        eval_ratio=0.1,
+        n_workers=0,
+        n_jobs=-1,
+        n_records=-1,
+        scaling="robust",
+        adjustment=None,
+        **kwargs,
+    ):
+        super().__init__()
+        self.adjustment = adjustment
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.cv = cv
+        self.cv_idx = cv_idx
+        self.eval_ratio = eval_ratio
+        self.n_jobs = n_jobs
+        self.n_records = n_records
+        self.n_workers = n_workers
+        self.scaling = scaling
+        self.data = {"train": os.path.join(data_dir, "train"), "test": os.path.join(data_dir, "test")}
+        self.dataset_params = dict(
+            # data_dir=self.data_dir,
+            cv=self.cv,
+            cv_idx=self.cv_idx,
+            eval_ratio=self.eval_ratio,
+            n_jobs=self.n_jobs,
+            n_records=self.n_records,
+            scaling=self.scaling,
+            adjustment=self.adjustment,
+        )
+
+    def setup(self, stage="fit"):
+        if stage == "fit":
+            dataset = SscWscPsgDataset(data_dir=self.data["train"], **self.dataset_params)
+            self.train, self.eval = dataset.split_data()
+        elif stage == "test":
+            self.test = SscWscPsgDataset(data_dir=self.data["test"], overlap=False, **self.dataset_params)
+
+    def train_dataloader(self):
+        """Return training dataloader."""
+        return torch.utils.data.DataLoader(
+            self.train,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.n_workers,
+            pin_memory=True,
+            drop_last=True,
+        )
+
+    def val_dataloader(self):
+        """Return validation dataloader."""
+        return torch.utils.data.DataLoader(
+            self.eval,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.n_workers,
+            pin_memory=True,
+            drop_last=True,
+        )
+
+    def test_dataloader(self):
+        """Return test dataloader."""
+        return torch.utils.data.DataLoader(
+            self.test, batch_size=self.batch_size, shuffle=False, num_workers=self.n_workers, pin_memory=True,
+        )
+
+    @staticmethod
+    def add_dataset_specific_args(parent_parser):
+        from argparse import ArgumentParser
+
+        # DATASET specific
+        parser = ArgumentParser(parents=[parent_parser], add_help=False)
+        dataset_group = parser.add_argument_group("dataset")
+        dataset_group.add_argument("--data_dir", default="data/train/raw/individual_encodings", type=str)
+        dataset_group.add_argument("--eval_ratio", default=0.1, type=float)
+        dataset_group.add_argument("--n_jobs", default=-1, type=int)
+        dataset_group.add_argument("--n_records", default=-1, type=int)
+        dataset_group.add_argument("--scaling", default=None, type=str)
+        dataset_group.add_argument("--adjustment", default=0, type=int)
+        dataset_group.add_argument("--cv", default=None, type=int)
+        dataset_group.add_argument("--cv_idx", default=None, type=int)
+
+        # DATALOADER specific
+        dataloader_group = parser.add_argument_group("dataloader")
+        dataloader_group.add_argument("--batch_size", default=64, type=int)
+        dataloader_group.add_argument("--n_workers", default=20, type=int)
+
+        return parser
+
+
+if __name__ == "__main__":
 
     from tqdm import tqdm
     np.random.seed(42)
