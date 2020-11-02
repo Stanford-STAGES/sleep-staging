@@ -24,6 +24,7 @@ except ImportError:
     from utils.h5_utils import load_h5_data
     from utils.parallel_bar import ParallelExecutor
 
+warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
 
 def load_psg_h5_data(filename):
 
