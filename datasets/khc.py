@@ -10,13 +10,13 @@ from h5py import File
 from joblib import delayed
 from joblib import Memory
 from joblib import Parallel
+from sklearn.preprocessing import RobustScaler, StandardScaler
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from torch.utils.data import Subset
 from tqdm import tqdm
 
-from utils import ParallelExecutor
-from utils import load_h5_data
+SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
 
 
 def load_psg_h5_data(filename):
@@ -42,6 +42,7 @@ class KoreanDataset(Dataset):
         self.n_jobs = n_jobs
         self.subset = subset
         self.cohort = "khc"
+        self.scaling = scaling
         if self.data_dir is None:
             self.data_dir = os.path.join("data", self.subset, self.encoding, self.cohort)
 
@@ -60,6 +61,7 @@ class KoreanDataset(Dataset):
         for record, sequences_in_file in zip(tqdm(self.records, desc="Processing"), data):
             self.record_indices[record] = np.arange(sequences_in_file)
             self.index_to_record.extend([{"record": record, "idx": x} for x in range(sequences_in_file)])
+            self.scalers[record] = scaler
         print("Finished loading data")
 
     # def shuffle_records(self):
@@ -83,6 +85,7 @@ class KoreanDataset(Dataset):
             # Grab data
             current_record = self.index_to_record[idx]["record"]
             current_sequence = self.index_to_record[idx]["idx"]
+            scaler = self.scalers[current_record]
 
             # Grab data
             with File(os.path.join(self.data_dir, current_record), "r") as f:
@@ -97,7 +100,8 @@ class KoreanDataset(Dataset):
         if np.isnan(x).any():
             print("NaNs detected!")
 
-        return x, t, current_record, current_sequence
+        if scaler:
+            x = scaler.transform(x.T).T  # (n_channels, n_samples)
 
     def __str__(self):
         s = f"""
