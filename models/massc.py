@@ -27,23 +27,16 @@ except:
 
 class MasscModel(ptl.LightningModule):
 
-    def __init__(self, **kwargs):
+        self, hparams, *args, **kwargs
         super().__init__()
-        self.__dict__.update(kwargs)
-        self.hparams = kwargs
-        self.metrics = {
-            'accuracy': Accuracy(reduce_op='mean'),
-            'f1': F1(reduce_op='mean'),
-            'precision': Precision(reduce_op='mean'),
-            'recall': Recall(reduce_op='mean'),
-        }
-        self.example_input_array = torch.zeros(self.batch_size, 5, 5 * 60 * 128)
+        self.save_hyperparameters({k: v for k, v in hparams.items() if not callable(v)})
+        self.example_input_array = torch.zeros(self.hparams.batch_size, self.hparams.n_channels, 5 * 60 * 128)
 
         # Create mixing block
-        if self.n_channels != 1:
+        if self.hparams.n_channels != 1:
             self.mixing_block = nn.Sequential(OrderedDict([
-                ('mix_conv', nn.Conv1d(self.n_channels, self.n_channels, 1)),
-                ('mix_batchnorm', nn.BatchNorm1d(self.n_channels)),
+                ('mix_conv', nn.Conv1d(self.hparams.n_channels, self.hparams.n_channels, 1)),
+                ('mix_batchnorm', nn.BatchNorm1d(self.hparams.n_channels)),
                 ('mix_relu', nn.ReLU())
             ]))
 
@@ -51,53 +44,52 @@ class MasscModel(ptl.LightningModule):
         self.shortcuts = nn.ModuleList([
             nn.Sequential(OrderedDict([
                 (f'shortcut_conv_{k}', nn.Conv1d(
-                    in_channels=self.n_channels if k == 0 else 4 * self.filter_base * (2 ** (k - 1)),
-                    out_channels=4 * self.filter_base * (2 ** k),
+                    in_channels=self.hparams.n_channels if k == 0 else 4 * self.hparams.filter_base * (2 ** (k - 1)),
+                    out_channels=4 * self.hparams.filter_base * (2 ** k),
                     kernel_size=1
                 )),
-            ])) for k in range(self.n_blocks)
+            ])) for k in range(self.hparams.n_blocks)
         ])
 
         # Create basic block structure
         self.blocks = nn.ModuleList([
             nn.Sequential(OrderedDict([
                 (f'conv_{k}_1', nn.Conv1d(
-                    in_channels=self.n_channels if k == 0 else 4 * self.filter_base * (2 ** (k - 1)),
-                    out_channels=self.filter_base * (2 ** k),
+                    in_channels=self.hparams.n_channels if k == 0 else 4 * self.hparams.filter_base * (2 ** (k - 1)),
+                    out_channels=self.hparams.filter_base * (2 ** k),
                     kernel_size=1)),
-                (f'batchnorm_{k}_1', nn.BatchNorm1d(self.filter_base * (2 ** k))),
+                (f'batchnorm_{k}_1', nn.BatchNorm1d(self.hparams.filter_base * (2 ** k))),
                 (f'relu_{k}_1', nn.ReLU()),
                 (f'conv_{k}_2', nn.Conv1d(
-                    in_channels=self.filter_base * (2 ** k),
-                    out_channels=self.filter_base * (2 ** k),
-                    kernel_size=self.kernel_size,
-                    padding=self.kernel_size // 2)),
-                (f'batchnorm_{k}_2', nn.BatchNorm1d(self.filter_base * (2 ** k))),
+                    in_channels=self.hparams.filter_base * (2 ** k),
+                    out_channels=self.hparams.filter_base * (2 ** k),
+                    kernel_size=self.hparams.kernel_size,
+                    padding=self.hparams.kernel_size // 2)),
+                (f'batchnorm_{k}_2', nn.BatchNorm1d(self.hparams.filter_base * (2 ** k))),
                 (f'relu_{k}_2', nn.ReLU()),
                 (f'conv_{k}_3', nn.Conv1d(
-                    in_channels=self.filter_base * (2 ** k),
-                    out_channels=4 * self.filter_base * (2 ** k),
+                    in_channels=self.hparams.filter_base * (2 ** k),
+                    out_channels=4 * self.hparams.filter_base * (2 ** k),
                     kernel_size=1)),
-                (f'batchnorm_{k}', nn.BatchNorm1d(4 * self.filter_base * (2 ** k)))
-            ])) for k in range(self.n_blocks)
+                (f'batchnorm_{k}', nn.BatchNorm1d(4 * self.hparams.filter_base * (2 ** k)))
+            ])) for k in range(self.hparams.n_blocks)
         ])
-        self.maxpool = nn.MaxPool1d(kernel_size=self.max_pooling)
+        self.maxpool = nn.MaxPool1d(kernel_size=self.hparams.max_pooling)
         self.relu = nn.ReLU()
 
         # Create temporal processing block
         self.temporal_block = nn.GRU(
-            input_size=4 * self.filter_base * (2 ** (self.n_blocks - 1)),
-            hidden_size=self.n_rnn_units,
-            num_layers=self.n_rnn_layers,
+                input_size=4 * self.hparams.filter_base * (2 ** (self.hparams.n_blocks - 1)),
+                hidden_size=self.hparams.n_rnn_units,
+                num_layers=self.hparams.n_rnn_layers,
             batch_first=True,
-            dropout=self.rnn_dropout,
-            bidirectional=self.rnn_bidirectional
+                dropout=self.hparams.rnn_dropout,
+                bidirectional=self.hparams.rnn_bidirectional
         )
 
         # Create classification block
         self.classification = nn.Conv1d(
-            in_channels=(1 + self.rnn_bidirectional) * self.n_rnn_units,
-            out_channels=self.n_classes,
+            out_channels=self.hparams.n_classes,
             kernel_size=1
         )
 
@@ -228,40 +220,37 @@ class MasscModel(ptl.LightningModule):
         self.trainable_params = [p[1] for p in self.named_parameters() if not 'bias' in p[0] and not 'batch_norm' in p[0]]
 
         # Change optimizer type and update specific parameters
-        if self.optimizer == 'adam':
-            self.optimizer_params.update(
-                dict(lr=self.learning_rate, weight_decay=self.weight_decay)
-            )
+        if self.hparams.optimizer == "adam":
+            self.optimizer_params.update(dict(lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay))
             optimizer = torch.optim.Adam
-        elif self.optimizer == 'sgd':
-            self.optimizer_params.update(
-                dict(lr=self.learning_rate, momentum=self.momentum, weight_decay=self.weight_decay)
-            )
+        elif self.hparams.optimizer == "sgd":
+            self.optimizer_params.update(dict(lr=self.hparams.learning_rate, momentum=self.hparams.momentum, weight_decay=self.hparams.weight_decay))
             optimizer = torch.optim.SGD
         else:
             raise NotImplementedError
         optimizer = optimizer(self.trainable_params, **self.optimizer_params)
 
         # Set scheduler
-        if not self.lr_scheduler:
-            self.lr_scheduler = 'reduce_on_plateau'
+        if not self.hparams.lr_scheduler:
+            self.hparams.lr_scheduler = "reduce_on_plateau"
 
-        if self.lr_scheduler:
+        if self.hparams.lr_scheduler:
             self.scheduler_params = {}
-            if self.lr_scheduler == 'cycliclr':
-                self.scheduler_params.update(
-                    dict(base_lr=self.base_lr, max_lr=self.max_lr, step_size_up=self.step_size_up)
-                )
-                scheduler = {'scheduler': torch.optim.lr_scheduler.CyclicLR(optimizer, **self.scheduler_params),
-                             'interval': 'step',
-                             'frequency': 1,  # self.steps_per_file,
-                             'name': 'lr_schedule'}
-            elif self.lr_scheduler == 'reduce_on_plateau':
-                self.scheduler_params.update(
-                    dict(factor=self.lr_reduce_factor, patience=self.lr_reduce_patience)
-                )
-                scheduler = {'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, **self.scheduler_params),
-                             'name': 'learning_rate'}
+            if self.hparams.lr_scheduler == "cycliclr":
+                self.scheduler_params.update(dict(base_lr=self.hparams.base_lr, max_lr=self.hparams.max_lr, step_size_up=self.hparams.step_size_up))
+                scheduler = {
+                    "scheduler": torch.optim.lr_scheduler.CyclicLR(optimizer, **self.scheduler_params),
+                    "interval": "step",
+                    "frequency": 1,  # self.steps_per_file,
+                    "name": "lr_schedule",
+                }
+            elif self.hparams.lr_scheduler == "reduce_on_plateau":
+                self.scheduler_params.update(dict(factor=self.hparams.lr_reduce_factor, patience=self.hparams.lr_reduce_patience))
+                scheduler = {
+                    "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, **self.scheduler_params),
+                    'monitor': 'eval_loss',
+                    "name": "learning_rate",
+                }
             else:
                 raise NotImplementedError
 
