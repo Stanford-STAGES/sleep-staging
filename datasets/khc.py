@@ -16,6 +16,12 @@ from torch.utils.data import Dataset
 from torch.utils.data import Subset
 from tqdm import tqdm
 
+try:
+    from utils import ParallelExecutor, load_h5_data
+except ImportError:
+    from utils.h5_utils import load_h5_data
+    from utils.parallel_bar import ParallelExecutor
+
 SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
 
 
