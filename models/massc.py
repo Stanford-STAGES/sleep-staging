@@ -391,8 +391,22 @@ class MasscModel(ptl.LightningModule):
 
     def test_step(self, batch, batch_index):
 
-        X, y, current_record, current_sequence = batch
+        X, y, current_record, current_sequence, stable_sleep = batch
         y_hat = self.forward(X)
+        # result = ptl.EvalResult()
+        # result.predicted = y_hat.softmax(dim=1)
+        # result.true = y
+        # result.record = current_record
+        # result.sequence_nr = current_sequence
+        # result.stable_sleep = stable_sleep
+        # return result
+        return {
+            "predicted": y_hat.softmax(dim=1),
+            "true": y,
+            "record": current_record,
+            "sequence_nr": current_sequence,
+            "stable_sleep": stable_sleep,
+        }
 
         return {'predicted': y_hat.softmax(dim=1), 'true': y, 'record': current_record, 'sequence_nr': current_sequence.cpu().numpy()}
 
