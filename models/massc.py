@@ -123,6 +123,8 @@ class MasscModel(ptl.LightningModule):
             out_channels=self.hparams.n_classes,
             kernel_size=1
         )
+        # Init bias term to 1 / n_classes
+        nn.init.constant_(self.classification.bias, 1 / self.hparams.n_classes)
 
     def forward(self, x):
         if self.temporal_block:
