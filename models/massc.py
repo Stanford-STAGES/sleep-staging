@@ -27,9 +27,34 @@ except:
 
 class MasscModel(ptl.LightningModule):
 
+# fmt: off
+class MasscModel(ptl.LightningModule):
+    def __init__(
         self, hparams, *args, **kwargs
+        # self, filter_base=None, kernel_size=None, max_pooling=None, n_blocks=None, n_channels=None,
+        # n_classes=None, n_rnn_layers=None, n_rnn_units=None, rnn_bidirectional=None, rnn_dropout=None,
+        # optimizer=None, learning_rate=None, momentum=None, weight_decay=None, loss_weight=None, lr_scheduler=None,
+        # base_lr=None, lr_reduce_factor=None, lr_reduce_patience=None, max_lr=None, step_size_up=None,
+        # data_dir=None, eval_ratio=None, n_jobs=None, n_records=None, scaling=None, adjustment=None,
+        # batch_size=None, n_workers=None, **kwargs,
+    ):
         super().__init__()
         self.save_hyperparameters({k: v for k, v in hparams.items() if not callable(v)})
+        self.train_acc = Accuracy()
+        # self.metrics = {
+        #     "accuracy": Accuracy(),
+        #     "f1": F1(),
+        #     "precision": Precision(),
+        #     "recall": Recall(),
+        #     "accuracy": Accuracy(reduce_op="mean"),
+        #     "f1": F1(reduce_op="mean"),
+        #     "precision": Precision(reduce_op="mean"),
+        #     "recall": Recall(reduce_op="mean"),
+        #     "accuracy": Accuracy(num_classes=self.hparams.n_classes, reduce_op="mean"),
+        #     "f1": F1(num_classes=self.hparams.n_classes, reduce_op="mean"),
+        #     "precision": Precision(num_classes=self.hparams.n_classes, reduce_op="mean"),
+        #     "recall": Recall(num_classes=self.hparams.n_classes, reduce_op="mean"),
+        # }
         self.example_input_array = torch.zeros(self.hparams.batch_size, self.hparams.n_channels, 5 * 60 * 128)
 
         # Create mixing block
@@ -123,7 +148,7 @@ class MasscModel(ptl.LightningModule):
     def compute_loss(self, y, y_hat):
         loss = F.cross_entropy(y_hat, y.argmax(dim=1))
         if torch.isnan(loss).any():
-            print('Bug!')
+            print("Bug!")
         return loss
 
     def compute_metrics(self, y, y_hat):
@@ -176,10 +201,11 @@ class MasscModel(ptl.LightningModule):
     def test_epoch_end(self, output_results):
         """This method collects the results and sorts the predictions according to record and sequence nr."""
         results = {r: {
-            'true': [],
-            'true_label': [],
-            'predicted': [],
-            'predicted_label': [],
+                "true": [],
+                "true_label": [],
+                "predicted": [],
+                "predicted_label": [],
+                "stable_sleep": [],
             # 'acc': None,
             # 'f1': None,
             # 'recall': None,
@@ -256,7 +282,7 @@ class MasscModel(ptl.LightningModule):
 
             return [optimizer], [scheduler]
         else:
-            return {'optimizer': optimizer, 'frequency': 1, 'interval': 'step'}
+            return {"optimizer": optimizer, "frequency": 1, "interval": "step"}
 
     def train_dataloader(self):
         """Return training dataloader."""
@@ -296,33 +322,29 @@ class MasscModel(ptl.LightningModule):
 
         # MODEL specific
         parser = ArgumentParser(parents=[parent_parser], add_help=True)
-        architecture_group = parser.add_argument_group('architecture')
-        architecture_group.add_argument('--filter_base', default=4, type=int)
-        architecture_group.add_argument('--kernel_size', default=3, type=int)
-        architecture_group.add_argument('--max_pooling', default=2, type=int)
-        architecture_group.add_argument('--n_blocks', default=7, type=int)
-        architecture_group.add_argument('--n_channels', default=5, type=int)
-        architecture_group.add_argument('--n_classes', default=5, type=int)
-        architecture_group.add_argument('--n_rnn_layers', default=1, type=int)
-        architecture_group.add_argument('--n_rnn_units', default=1024, type=int)
-        architecture_group.add_argument('--rnn_bidirectional', default=True, action='store_true')
-        architecture_group.add_argument('--rnn_dropout', default=0, type=float)
+        architecture_group = parser.add_argument_group("architecture")
+        architecture_group.add_argument("--filter_base", default=4, type=int)
+        architecture_group.add_argument("--kernel_size", default=3, type=int)
+        architecture_group.add_argument("--max_pooling", default=2, type=int)
+        architecture_group.add_argument("--n_blocks", default=7, type=int)
+        architecture_group.add_argument("--n_channels", default=5, type=int)
+        architecture_group.add_argument("--n_classes", default=5, type=int)
+        architecture_group.add_argument("--n_rnn_layers", default=1, type=int)
+        architecture_group.add_argument("--n_rnn_units", default=1024, type=int)
+        architecture_group.add_argument("--rnn_bidirectional", default=True, action="store_true")
+        architecture_group.add_argument("--rnn_dropout", default=0, type=float)
 
         # OPTIMIZER specific
-        optimizer_group = parser.add_argument_group('optimizer')
-        optimizer_group.add_argument('--optimizer', default='sgd', type=str)
-        optimizer_group.add_argument('--learning_rate', default=0.1, type=float)
-        optimizer_group.add_argument('--momentum', default=0.9, type=float)
-        optimizer_group.add_argument('--weight_decay', default=0, type=float)
+        optimizer_group.add_argument("--weight_decay", default=0, type=float)
 
         # LEARNING RATE SCHEDULER specific
-        lr_scheduler_group = parser.add_argument_group('lr_scheduler')
-        lr_scheduler_group.add_argument('--lr_scheduler', default=None, type=str)
-        lr_scheduler_group.add_argument('--base_lr', default=0.05, type=float)
-        lr_scheduler_group.add_argument('--lr_reduce_factor', default=0.1, type=float)
-        lr_scheduler_group.add_argument('--lr_reduce_patience', default=5, type=int)
-        lr_scheduler_group.add_argument('--max_lr', default=0.15, type=float)
-        lr_scheduler_group.add_argument('--step_size_up', default=0.05, type=int)
+        lr_scheduler_group = parser.add_argument_group("lr_scheduler")
+        lr_scheduler_group.add_argument("--lr_scheduler", default=None, type=str)
+        lr_scheduler_group.add_argument("--base_lr", default=0.05, type=float)
+        lr_scheduler_group.add_argument("--lr_reduce_factor", default=0.1, type=float)
+        lr_scheduler_group.add_argument("--lr_reduce_patience", default=5, type=int)
+        lr_scheduler_group.add_argument("--max_lr", default=0.15, type=float)
+        lr_scheduler_group.add_argument("--step_size_up", default=0.05, type=int)
 
         # DATASET specific
         dataset_group = parser.add_argument_group('dataset')
@@ -338,7 +360,7 @@ class MasscModel(ptl.LightningModule):
         return parser
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     model_parameters = dict(
         filter_base=4,
@@ -351,15 +373,16 @@ if __name__ == '__main__':
         n_rnn_units=1024,
         rnn_bidirectional=True,
         rnn_dropout=0,
-        optimizer='sgd',
+        optimizer="sgd",
         learning_rate=0.1,
         momentum=0.9,
         weight_decay=0,
-        lr_scheduler='cycliclr',
+        lr_scheduler="cycliclr",
         base_lr=0.05,
         max_lr=0.15,
         step_size_up=0.05,
-        data_dir='data/raw/individual_encodings',
+        # data_dir="data/raw/individual_encodings",
+        data_dir="./data/full_length/ssc_wsc/raw/train",
         eval_ratio=0.1,
         n_jobs=-1,
         batch_size=32,
@@ -367,12 +390,12 @@ if __name__ == '__main__':
     )
     model = MasscModel(**model_parameters)
     model.configure_optimizers()
-    model.setup('fit')
-    model_summary = ptl.core.memory.ModelSummary(model, 'full')
+    model.setup("fit")
+    model_summary = ptl.core.memory.ModelSummary(model, "full")
     print(model_summary)
 
     x_shape = (32, 5, 5 * 60 * 128)
     x = torch.rand(x_shape)
     z = model(x)
-    print('z.shape:', z.shape)
+    print("z.shape:", z.shape)
     pass
