@@ -499,9 +499,11 @@ class MasscModel(ptl.LightningModule):
         else:
             return {"optimizer": optimizer, "frequency": 1, "interval": "step"}
 
-    def train_dataloader(self):
-        """Return training dataloader."""
-        return torch.utils.data.DataLoader(self.train_data, batch_size=self.batch_size, shuffle=True, num_workers=self.n_workers, pin_memory=True)
+    def get_progress_bar_dict(self):
+        # don't show the version number
+        items = super().get_progress_bar_dict()
+        items.pop("v_num", None)
+        return items
 
     def val_dataloader(self):
         """Return validation dataloader."""
