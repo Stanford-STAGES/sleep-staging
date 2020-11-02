@@ -449,6 +449,7 @@ class MasscModel(ptl.LightningModule):
             # results[r]['precision'] = precision.cpu().numpy()
             # results[r]['recall'] = recall.cpu().numpy()
 
+        # # return output_results
         return results
 
     def configure_optimizers(self):
