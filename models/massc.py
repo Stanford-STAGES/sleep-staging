@@ -191,16 +191,20 @@ class MasscModel(ptl.LightningModule):
         # metrics['baseline'] = y.mean(dim=0).detach()
         return metrics
 
-    def training_step(self, batch, batch_index):
-
-        X, y, _, _ = batch
-        # del batch
+    def shared_step(self, X, y, stable_sleep):
         y_hat = self.forward(X)
-        if torch.isnan(y_hat).any():
-            print('Bug!')
-        loss = self.compute_loss(y, y_hat)
-        metrics = {'_'.join(['train', k]): v for k, v in self.compute_metrics(y, y_hat).items()}
+        try:
+            loss = self.compute_loss(y.transpose(2, 1)[stable_sleep], y_hat.transpose(2, 1)[stable_sleep])
+        except RuntimeError as err:
+            print(f'y: {y.transpose(2, 1)[stable_sleep]}')
+            print(f'y.shape: {y.transpose(2, 1)[stable_sleep].shape}')
+            print(f'y_hat: {y_hat.transpose(2, 1)[stable_sleep]}')
+            print(f'y_hat.shape: {y_hat.transpose(2, 1)[stable_sleep].shape}')
+            print(f'stable_sleep: {stable_sleep}')
+            print(f'stable_sleep.shape: {stable_sleep.shape}')
+            print(err)
 
+        return loss, y_hat
         # logs = {'train_loss': loss, 'train_acc': acc, 'train_baseline': baseline}
 
         return {'loss': loss, 'log': {**dict(train_loss=loss), **metrics}}
