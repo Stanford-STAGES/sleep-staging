@@ -412,6 +412,87 @@ class MasscModel(ptl.LightningModule):
 
     def test_epoch_end(self, output_results):
         """This method collects the results and sorts the predictions according to record and sequence nr."""
+
+        all_records = sorted(self.trainer.datamodule.test.records)
+        true = torch.cat([out['true'] for out in output_results], dim=0).permute([0, 2, 1])
+        predicted = torch.cat([out['predicted'] for out in output_results], dim=0).permute([0, 2, 1])
+        stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in output_results], dim=0)
+        sequence_nrs = torch.cat([out['sequence_nr'] for out in output_results], dim=0)
+        # records = [i for i, out in enumerate(output_results) for j, _ in enumerate(out['record'])]
+
+        if self.use_ddp:
+            record2int = {r: idx for idx, r in enumerate(all_records)}
+            int2record = {idx: r for idx, r in enumerate(all_records)}
+            records = torch.cat([torch.Tensor([record2int[r]]).type_as(stable_sleep) for out in output_results for r in out['record']], dim=0)
+            out_true = [torch.zeros_like(true) for _ in range(dist.get_world_size())]
+            out_predicted = [torch.zeros_like(predicted) for _ in range(dist.get_world_size())]
+            out_stable_sleep = [torch.zeros_like(stable_sleep) for _ in range(dist.get_world_size())]
+            out_seq_nrs = [torch.zeros_like(sequence_nrs) for _ in range(dist.get_world_size())]
+            out_records = [torch.zeros_like(records) for _ in range(dist.get_world_size())]
+
+            dist.barrier()
+            dist.all_gather(out_true, true)
+            dist.all_gather(out_predicted, predicted)
+            dist.all_gather(out_stable_sleep, stable_sleep)
+            dist.all_gather(out_seq_nrs, sequence_nrs)
+            dist.all_gather(out_records, records)
+
+            if dist.get_rank() == 0:
+                true = torch.cat(out_true)
+                predicted = torch.cat(out_predicted)
+                stable_sleep = torch.cat(out_stable_sleep)
+                sequence_nrs = torch.cat(out_seq_nrs)
+                records = [int2record[r.item()] for r in torch.cat(out_records)]
+
+                # acc = metrics.accuracy_score(t[s].argmax(-1), p[s].argmax(-1))
+                # cohen = metrics.cohen_kappa_score(t[s].argmax(-1), p[s].argmax(-1), labels=[0, 1, 2, 3, 4])
+                # f1_macro = metrics.f1_score(t[s].argmax(-1), p[s].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
+
+                # self.log_dict({
+                #     'eval_acc': acc,
+                #     'eval_cohen': cohen,
+                #     'eval_f1_macro': f1_macro,
+                # }, prog_bar=True)
+
+            else:
+                return None
+        else:
+            records = [r for out in output_results for r in out['record']]
+        # elif self.on_gpu:
+            # true = true.c
+            # predicted = predicted
+            # stable_sleep = stable_sleep.to(torch.bool)
+
+            # acc = metrics.accuracy_score(t[s].argmax(-1), p[s].argmax(-1))
+            # cohen = metrics.cohen_kappa_score(t[s].argmax(-1), p[s].argmax(-1), labels=[0, 1, 2, 3, 4])
+            # f1_macro = metrics.f1_score(t[s].argmax(-1), p[s].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
+
+            # self.log_dict({
+            #     'eval_acc': acc,
+            #     'eval_cohen': cohen,
+            #     'eval_f1_macro': f1_macro
+            # }, prog_bar=True)
+        # else:
+
+        #     t = true.numpy()
+        #     p = predicted.numpy()
+        #     s = stable_sleep.to(torch.bool).numpy()
+
+        #     acc = metrics.accuracy_score(t[s].argmax(-1), p[s].argmax(-1))
+        #     cohen = metrics.cohen_kappa_score(t[s].argmax(-1), p[s].argmax(-1), labels=[0, 1, 2, 3, 4])
+        #     f1_macro = metrics.f1_score(t[s].argmax(-1), p[s].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
+
+        #     self.log_dict({
+        #         'eval_acc': acc,
+        #         'eval_cohen': cohen,
+        #         'eval_f1_macro': f1_macro
+        #     }, prog_bar=True)
+
+        # try:
+        #     all_records = self.test_dataloader.dataloader.dataset.records # When running a new dataset
+        # except AttributeError:
+        #     all_records = self.test_data.records # When running on the train data
+        # all_records = sorted(set(records))
         results = {r: {
                 "true": [],
                 "true_label": [],
@@ -422,32 +503,76 @@ class MasscModel(ptl.LightningModule):
             # 'f1': None,
             # 'recall': None,
             # 'precision': None,
-        } for r in self.test_dataloader.dataloader.dataset.records}
-        print('Eyoooo')
+            } for r in all_records
+        }
 
-        for r in self.test_dataloader.dataloader.dataset.records:
-            current_record = sorted([v for v in output_results if v['record'][0] == r], key=lambda x: x['sequence_nr'])
-            if not current_record:
-                results.pop(r, None)
-                continue
-            y = torch.cat([v['predicted'] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.n_channels, -1)
-            t = torch.cat([v['true'] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.n_channels, -1)
-            y_label = y.argmax(dim=0)
-            t_label = t.argmax(dim=0)
-            # cm = ptl.metrics.ConfusionMatrix()(y_label, t_label)
-            # acc = ptl.metrics.Accuracy()(y_label, t_label)
-            # f1 = ptl.metrics.F1(reduction='none')(y_label, t_label)
-            # precision = ptl.metrics.Precision(reduction='none')(y_label, t_label)
-            # recall = ptl.metrics.Recall(reduction='none')(y_label, t_label)
-            results[r]['true'] = t.cpu().numpy()
-            results[r]['true_label'] = t_label.cpu().numpy()
-            results[r]['predicted'] = y.cpu().numpy()
-            results[r]['predicted_label'] = y_label.cpu().numpy()
-            # results[r]['acc'] = acc.cpu().numpy()
-            # results[r]['cm'] = cm.cpu().numpy()
-            # results[r]['f1'] = f1.cpu().numpy()
-            # results[r]['precision'] = precision.cpu().numpy()
-            # results[r]['recall'] = recall.cpu().numpy()
+        # def gather_record(r, _r, _t, _p, _ss):
+        #     r_idx = [idx for idx, rec in enumerate(_r) if r == rec]
+        #     current_t = torch.cat([t for idx, t in enumerate(_t) if idx in r_idx], dim=0)
+        #     current_p = torch.cat([p for idx, p in enumerate(_p) if idx in r_dx], dim=0)
+        #     current_ss = torch.cat([ss.to(torch.bool) for idx, ss in enumerate(_ss) if idx in r_idx], dim=0)
+            # results[r]['true'] = current_t.cpu().numpy()
+            # results[r]['predicted'] = current_p.cpu().numpy()
+            # results[r]['stable_sleep'] = current_ss.cpu().numpy()
+            # return (r, current_t, current_p, current_ss)
+
+        # results = ParallelExecutor(n_jobs=-1)(total=len(all_records))(delayed(gather_record)(r, records, true, predicted, stable_sleep) for r in all_records)
+
+        for r in tqdm(all_records, desc='Sorting predictions...'):
+            record_idx = [idx for idx, rec in enumerate(records) if r == rec]
+            current_t = torch.cat([t for idx, t in enumerate(true) if idx in record_idx], dim=0)
+            current_p = torch.cat([p for idx, p in enumerate(predicted) if idx in record_idx], dim=0)
+            current_ss = torch.cat([ss.to(torch.bool) for idx, ss in enumerate(stable_sleep) if idx in record_idx], dim=0)
+
+            results[r]['true'] = current_t.cpu().numpy()
+            results[r]['predicted'] = current_p.cpu().numpy()
+            results[r]['stable_sleep'] = current_ss.cpu().numpy()
+
+
+        # with open(os.path.join(results_dir, f"{name}_predictions.pkl"), "wb") as pkl:
+        #     pickle.dump(predictions, pkl)
+        #     if isinstance(output_results, dict):
+        #         current_record = {k: v for k, v in output_results.items() if k is not 'meta'}
+        #         current_record = [dict(zip(current_record, t)) for t in zip(*current_record.values())]
+        #         current_record = sorted([v for v in current_record if v["record"][0] == r], key=lambda x: x["sequence_nr"])
+        #     elif isinstance(output_results, list):
+        #     # current_record = {k: [record for record in records if ] for k, v in output_results.items() if k is not 'meta'}
+        #     # current_record = {k: v for k, v in current_record.items()}
+        #         current_record = sorted([v for v in output_results if v["record"][0] == r], key=lambda x: x["sequence_nr"])
+        #     if not current_record:
+        #         results.pop(r, None)
+        #         continue
+        #     y = torch.cat([v["predicted"] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.hparams.n_classes, -1)
+        #     try:
+        #         t = torch.cat([v["true"] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.hparams.n_classes, -1)
+        #     except RuntimeError as e:
+        #         raise RuntimeError(f'Current record: {current_record[0]["record"][0]}, {e}')
+        #     stable_sleep = torch.cat([v["stable_sleep"] for v in current_record], dim=0).flatten()
+        #     # y_label = y.argmax(dim=0)
+        #     # t_label = t.argmax(dim=0)
+        #     # cm = ptl.metrics.ConfusionMatrix()(y_label, t_label)
+        #     # acc = ptl.metrics.Accuracy()(y_label, t_label)
+        #     # f1 = ptl.metrics.F1(reduction='none')(y_label, t_label)
+        #     # precision = ptl.metrics.Precision(reduction='none')(y_label, t_label)
+        #     # recall = ptl.metrics.Recall(reduction='none')(y_label, t_label)
+        #     results[r]["true"] = t.cpu().numpy()
+        #     # results[r]["true_label"] = t_label.cpu().numpy()
+        #     results[r]["predicted"] = y.cpu().numpy()
+        #     results[r]['stable_sleep'] = stable_sleep.cpu().numpy()
+        #     # results[r]["predicted_label"] = y_label.cpu().numpy()
+        #     # results[r]['acc'] = acc.cpu().numpy()
+        #     # results[r]['cm'] = cm.cpu().numpy()
+        #     # results[r]['f1'] = f1.cpu().numpy()
+        #     # results[r]['precision'] = precision.cpu().numpy()
+        #     # results[r]['recall'] = recall.cpu().numpy()
+
+        #     # results_dir = os.path.dirname(self.hparams.resume_from_checkpoint)
+        #     # with open(os.path.join(results_dir, f"{_name}_predictions.pkl"), "wb") as pkl:
+        #     #     pickle.dump(predictions, pkl)
+
+        #     # df_results = evaluate_performance(predictions)
+        #     # df_results.to_csv(os.path.join(results_dir, f"{_name}_results.csv"))
+        # # output_results.results = results
 
         # # return output_results
         return results
