@@ -623,14 +623,21 @@ if __name__ == "__main__":
         eval_ratio=0.1,
         n_jobs=-1,
         batch_size=32,
-        n_workers=0
+        n_workers=0,
+        scaling="robust",
+        adjustment=30,
+        n_records=10,
     )
     model = MasscModel(**model_parameters)
     model.configure_optimizers()
     model.setup("fit")
     model_summary = ptl.core.memory.ModelSummary(model, "full")
     print(model_summary)
-
+    train_data = model.train_dataloader()
+    # for batch_idx, batch in enumerate(train_data):
+    #     print(batch_idx, batch)
+    batch = next(iter(model.train_dataloader()))
+    model.training_step(batch, 0)
     x_shape = (32, 5, 5 * 60 * 128)
     x = torch.rand(x_shape)
     z = model(x)
