@@ -456,7 +456,9 @@ class MasscModel(ptl.LightningModule):
 
         # Set common parameters
         self.optimizer_params = {}
-        self.trainable_params = [p[1] for p in self.named_parameters() if not 'bias' in p[0] and not 'batch_norm' in p[0]]
+        # self.trainable_params = [p[1] for p in self.named_parameters() if not "bias" in p[0] and not "batch_norm" in p[0]]
+        # self.trainable_params = [p[1] for p in self.named_parameters() if not "bias" in p[0]]
+        self.trainable_params = self.parameters()
 
         # Change optimizer type and update specific parameters
         if self.hparams.optimizer == "adam":
