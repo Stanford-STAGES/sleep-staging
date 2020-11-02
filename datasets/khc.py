@@ -122,7 +122,7 @@ def load_psg_h5_data(filename):
 class KoreanDataset(Dataset):
     """Korean Hypersomnia Cohort"""
 
-    def __init__(self, data_dir=None, encoding="raw", n_jobs=-1, subset="test"):
+    def __init__(self, data_dir=None, encoding="raw", n_jobs=-1, n_records=-1, subset="test", overlap=True, adjustment=30, scaling=None):
         super().__init__()
         self.data_dir = data_dir
         self.encoding = encoding
@@ -130,6 +130,8 @@ class KoreanDataset(Dataset):
         self.subset = subset
         self.cohort = "khc"
         self.scaling = scaling
+        self.adjustment = adjustment
+        self.n_records = n_records
         self.overlap = overlap
         if self.data_dir is None:
             self.data_dir = os.path.join("data", self.subset, self.encoding, self.cohort)
