@@ -505,26 +505,38 @@ class MasscModel(ptl.LightningModule):
         items.pop("v_num", None)
         return items
 
-    def val_dataloader(self):
-        """Return validation dataloader."""
-        return torch.utils.data.DataLoader(self.eval_data, batch_size=self.batch_size, shuffle=False, num_workers=self.n_workers, pin_memory=True)
+    # def train_dataloader(self):
+    #     """Return training dataloader."""
+    #     return torch.utils.data.DataLoader(
+    #         self.train_data, batch_size=self.hparams.batch_size, shuffle=True, num_workers=self.hparams.n_workers, pin_memory=True
+    #     )
 
-    def setup(self, stage):
-        if stage == 'fit':
-            self.dataset_params = dict(data_dir=self.data_dir, n_jobs=self.n_jobs)
-            self.dataset = SscWscPsgDataset(**self.dataset_params)
-            self.train_data, self.eval_data = self.dataset.split_data(self.eval_ratio)
+    # def val_dataloader(self):
+    #     """Return validation dataloader."""
+    #     return torch.utils.data.DataLoader(
+    #         self.eval_data, batch_size=self.hparams.batch_size, shuffle=False, num_workers=self.hparams.n_workers, pin_memory=True
+    #     )
 
-    def split_data(self):
+    # def test_dataloader(self):
+    #     return torch.utils.data.DataLoader(self.test_data, batch_size=1, shuffle=False, num_workers=self.hparams.n_workers, pin_memory=True)
 
-        n_total = len(self.dataset)
-        n_eval = int(np.ceil(self.eval_ratio * n_total))
-        n_train = n_total - n_eval
+    # def setup(self, stage):
+    #     if stage == "fit":
+    #         self.dataset = datasets.SscWscPsgDataset(**self.dataset_params)
+    #         self.train_data, self.eval_data = self.dataset.split_data(self.hparams.eval_ratio)
+    #     # elif stage == 'test':
+    #     #     self.test_data = datasets.SscWscPsgDataset(**self.dataset_params)
 
-        self.train_data, self.eval_data = torch.utils.data.random_split(self.dataset, [n_train, n_eval])
-        print('Dataset length: ', len(self.dataset))
-        print('Train dataset length: ', len(self.train_data))
-        print('Eval dataset length: ', len(self.eval_data))
+    # def split_data(self):
+
+    #     n_total = len(self.dataset)
+    #     n_eval = int(np.ceil(self.hparams.eval_ratio * n_total))
+    #     n_train = n_total - n_eval
+
+    #     self.train_data, self.eval_data = torch.utils.data.random_split(self.dataset, [n_train, n_eval])
+    #     print("Dataset length: ", len(self.dataset))
+    #     print("Train dataset length: ", len(self.train_data))
+    #     print("Eval dataset length: ", len(self.eval_data))
 
     # def on_post_performance_check(self):
     #     if not self.testing == '1':
@@ -563,16 +575,19 @@ class MasscModel(ptl.LightningModule):
         lr_scheduler_group.add_argument("--max_lr", default=0.15, type=float)
         lr_scheduler_group.add_argument("--step_size_up", default=0.05, type=int)
 
-        # DATASET specific
-        dataset_group = parser.add_argument_group('dataset')
-        dataset_group.add_argument('--data_dir', default='data/train/raw/individual_encodings', type=str)
-        dataset_group.add_argument('--eval_ratio', default=0.1, type=float)
-        dataset_group.add_argument('--n_jobs', default=-1, type=int)
+        # # DATASET specific
+        # dataset_group = parser.add_argument_group("dataset")
+        # dataset_group.add_argument("--data_dir", default="data/train/raw/individual_encodings", type=str)
+        # dataset_group.add_argument("--eval_ratio", default=0.1, type=float)
+        # dataset_group.add_argument("--n_jobs", default=-1, type=int)
+        # dataset_group.add_argument("--n_records", default=-1, type=int)
+        # dataset_group.add_argument("--scaling", default=None, type=str)
+        # dataset_group.add_argument("--adjustment", default=30, type=int)
 
-        # DATALOADER specific
-        dataloader_group = parser.add_argument_group('dataloader')
-        dataloader_group.add_argument('--batch_size', default=32, type=int)
-        dataloader_group.add_argument('--n_workers', default=10, type=int)
+        # # DATALOADER specific
+        # dataloader_group = parser.add_argument_group("dataloader")
+        # dataloader_group.add_argument("--batch_size", default=32, type=int)
+        # dataloader_group.add_argument("--n_workers", default=10, type=int)
 
         return parser
 
