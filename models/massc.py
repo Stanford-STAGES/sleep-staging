@@ -25,7 +25,6 @@ try:
 except:
     from utils.parallel_bar import ParallelExecutor
 
-class MasscModel(ptl.LightningModule):
 
 # fmt: off
 class MasscModel(ptl.LightningModule):
@@ -104,14 +103,14 @@ class MasscModel(ptl.LightningModule):
 
         # Create temporal processing block
         if self.hparams.n_rnn_units > 0:
-        self.temporal_block = nn.GRU(
+            self.temporal_block = nn.GRU(
                 input_size=4 * self.hparams.filter_base * (2 ** (self.hparams.n_blocks - 1)),
                 hidden_size=self.hparams.n_rnn_units,
                 num_layers=self.hparams.n_rnn_layers,
-            batch_first=True,
+                batch_first=True,
                 dropout=self.hparams.rnn_dropout,
                 bidirectional=self.hparams.rnn_bidirectional
-        )
+            )
             classification_in_channels = (1 + self.hparams.rnn_bidirectional) * self.hparams.n_rnn_units
         else:
             self.temporal_block = None
@@ -408,8 +407,6 @@ class MasscModel(ptl.LightningModule):
             "stable_sleep": stable_sleep,
         }
 
-        return {'predicted': y_hat.softmax(dim=1), 'true': y, 'record': current_record, 'sequence_nr': current_sequence.cpu().numpy()}
-
     def test_epoch_end(self, output_results):
         """This method collects the results and sorts the predictions according to record and sequence nr."""
 
@@ -499,10 +496,10 @@ class MasscModel(ptl.LightningModule):
                 "predicted": [],
                 "predicted_label": [],
                 "stable_sleep": [],
-            # 'acc': None,
-            # 'f1': None,
-            # 'recall': None,
-            # 'precision': None,
+                # 'acc': None,
+                # 'f1': None,
+                # 'recall': None,
+                # 'precision': None,
             } for r in all_records
         }
 
