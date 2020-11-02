@@ -268,15 +268,17 @@ class SscWscDataModule(pl.LightningDataModule):
 if __name__ == "__main__":
 
     from tqdm import tqdm
+
     np.random.seed(42)
     random.seed(42)
 
-    dataset_params = dict(data_dir='./data/raw/individual_encodings', n_jobs=-1)
+    # dataset_params = dict(data_dir="./data/raw/individual_encodings", n_jobs=1, scaling="robust", n_records=10)
+    dataset_params = dict(data_dir="./data/full_length/ssc_wsc/raw/train", n_jobs=1, scaling="robust", n_records=10,)
     dataset = SscWscPsgDataset(**dataset_params)
     print(dataset)
     train_data, eval_data = dataset.split_data(0.1)
     print(train_data)
-    pbar = tqdm(DataLoader(train_data, batch_size=32, shuffle=True, num_workers=20, pin_memory=True))
+    pbar = tqdm(DataLoader(train_data, batch_size=32, shuffle=True, num_workers=0, pin_memory=True))
     for idx, (x, t) in enumerate(pbar):
         if idx == 0:
             print(x.shape)
