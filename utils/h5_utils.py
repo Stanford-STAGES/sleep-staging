@@ -1,5 +1,9 @@
 import numpy as np
 from h5py import File
+from sklearn.preprocessing import *
+
+
+SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
 
 
 def load_h5_data(filename, seg_size):
@@ -30,3 +34,19 @@ def load_h5_data(filename, seg_size):
         np.reshape(weights, [seq_in_file, n_segs, seg_size]),
         seq_in_file,
     )
+
+
+def load_psg_h5_data(filename, scaling=None):
+    scaler = None
+
+    if scaling:
+        scaler = SCALERS[scaling]()
+
+    with File(filename, "r") as h5:
+        N, C, T = h5["M"].shape
+        sequences_in_file = N
+
+        if scaling:
+            scaler.fit(h5["M"][:].transpose(1, 0, 2).reshape((C, N * T)).T)
+
+    return sequences_in_file, scaler
