@@ -126,6 +126,10 @@ class MasscModel(ptl.LightningModule):
         # Init bias term to 1 / n_classes
         nn.init.constant_(self.classification.bias, 1 / self.hparams.n_classes)
 
+        # Define loss function
+        # self.register_buffer('loss_weights', torch.Tensor(self.hparams.cb_weights))
+        # self.loss = nn.CrossEntropyLoss(weight=self.loss_weights)
+        self.loss = nn.CrossEntropyLoss(weight=torch.Tensor(self.hparams.cb_weights))
     def forward(self, x):
         if self.temporal_block:
             self.temporal_block.flatten_parameters()
@@ -154,7 +158,11 @@ class MasscModel(ptl.LightningModule):
         return z
 
     def compute_loss(self, y, y_hat):
-        loss = F.cross_entropy(y_hat, y.argmax(dim=1))
+        loss = self.loss(y_hat, y.argmax(dim=1))
+        # if self.hparams.loss_weight:
+        #     loss = F.cross_entropy(y_hat, y.argmax(dim=1), weight=torch.Tensor(self.hparams.loss_weight).type_as(y_hat))
+        # else:
+        #     loss = F.cross_entropy(y_hat, y.argmax(dim=1))
         if torch.isnan(loss).any():
             print("Bug!")
         return loss
