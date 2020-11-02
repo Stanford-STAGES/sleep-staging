@@ -19,7 +19,7 @@ from torch.utils.data import Subset
 from tqdm import tqdm
 
 try:
-from utils import ParallelExecutor, load_h5_data
+    from utils import ParallelExecutor, load_h5_data
 except ImportError:
     from utils.h5_utils import load_h5_data
     from utils.parallel_bar import ParallelExecutor
@@ -143,8 +143,8 @@ def load_psg_h5_data(filename, scaling=None):
             scaler.fit(h5["M"][:].transpose(1, 0, 2).reshape((C, N * T)).T)
 
     return sequences_in_file, scaler
-        # X = h5['M'][:].astype('float32')
-        # y = h5['L'][:].astype('float32')
+    # X = h5['M'][:].astype('float32')
+    # y = h5['L'][:].astype('float32')
 
     # sequences_in_file = X.shape[0]
 
