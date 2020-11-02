@@ -562,6 +562,7 @@ class MasscModel(ptl.LightningModule):
         architecture_group.add_argument("--n_rnn_units", default=1024, type=int)
         architecture_group.add_argument("--rnn_bidirectional", default=True, action="store_true")
         architecture_group.add_argument("--rnn_dropout", default=0, type=float)
+        architecture_group.add_argument("--loss_weight", default=None, nargs="+", type=float)
 
         # OPTIMIZER specific
         optimizer_group = parser.add_argument_group("optimizer")
