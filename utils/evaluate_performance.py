@@ -13,7 +13,24 @@ from sklearn.metrics import (
 )
 
 
-def evaluate_performance(record_predictions, evaluation_windows=[1, 3, 5, 10, 15, 30]):
+def transition_matrix(y, n_classes=5, eval_frequency=[30]):
+
+    # Generate count matrix
+    M = np.zeros((n_classes, n_classes))
+    for i, j in zip(y, y[1:]):
+        M[i, j] += 1
+
+    # Convert to probabilites
+    M /= M.sum(axis=1, keepdims=True)
+
+    return M
+
+
+# def get_transitions_matrices(record_predictions, eval_frequency=[30]):
+
+
+# fmt: off
+def evaluate_performance(record_predictions, evaluation_windows=[1, 3, 5, 10, 15, 30], cases=['all', 'stable', 'transition']):
     """Evaluate the performance of the predicted results.
 
     Args:
