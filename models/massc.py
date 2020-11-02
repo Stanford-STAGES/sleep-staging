@@ -564,6 +564,10 @@ class MasscModel(ptl.LightningModule):
         architecture_group.add_argument("--rnn_dropout", default=0, type=float)
 
         # OPTIMIZER specific
+        optimizer_group = parser.add_argument_group("optimizer")
+        optimizer_group.add_argument("--optimizer", default="sgd", type=str)
+        optimizer_group.add_argument("--learning_rate", default=0.1, type=float)
+        optimizer_group.add_argument("--momentum", default=0.9, type=float)
         optimizer_group.add_argument("--weight_decay", default=0, type=float)
 
         # LEARNING RATE SCHEDULER specific
