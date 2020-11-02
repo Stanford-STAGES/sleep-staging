@@ -103,6 +103,7 @@ class MasscModel(ptl.LightningModule):
         self.relu = nn.ReLU()
 
         # Create temporal processing block
+        if self.hparams.n_rnn_units > 0:
         self.temporal_block = nn.GRU(
                 input_size=4 * self.hparams.filter_base * (2 ** (self.hparams.n_blocks - 1)),
                 hidden_size=self.hparams.n_rnn_units,
@@ -111,9 +112,14 @@ class MasscModel(ptl.LightningModule):
                 dropout=self.hparams.rnn_dropout,
                 bidirectional=self.hparams.rnn_bidirectional
         )
+            classification_in_channels = (1 + self.hparams.rnn_bidirectional) * self.hparams.n_rnn_units
+        else:
+            self.temporal_block = None
+            classification_in_channels = 4 * self.hparams.filter_base * (2 ** (self.hparams.n_blocks - 1))
 
         # Create classification block
         self.classification = nn.Conv1d(
+            in_channels=classification_in_channels,
             out_channels=self.hparams.n_classes,
             kernel_size=1
         )
