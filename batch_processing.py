@@ -13,6 +13,7 @@ from errors import MissingHypnogramError
 from errors import MissingSignalsError
 from errors import ReferencingError
 from process_data import process_single_file
+from utils import chunks
 
 
 df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
@@ -33,6 +34,9 @@ def batch_start_jobs(args):
     seq_len = args.seq_len
     overlap = args.overlap
     process_fn = batch_process_and_save
+    out_dir = args.out_dir
+    n_jobs = args.n_jobs
+
     # if args.encoding_type == 'cc':
     #     process_fn = batch_process_and_save_encoding
     # elif args.encoding_type == 'raw':
@@ -42,6 +46,13 @@ def batch_start_jobs(args):
         overlap = 0
     else:
         subset = "train"
+
+    if out_dir:
+        # batch_log_dir = os.path.join("/home/users/alexno/sleep-staging", out_dir, "logs")
+        batch_log_dir = os.path.join("logs", "preprocessing")
+    else:
+        batch_log_dir = os.path.join("/home/users/alexno/sleep-staging/batch/logs", subset, encoding_type)
+    os.makedirs(batch_log_dir, exist_ok=True)
 
     # Make a list of all the files by looping over all available data-sources
     listF = []
@@ -56,7 +67,7 @@ def batch_start_jobs(args):
     something_wrong = []
     missing_hyp = []
     missing_sigs = []
-    for current_file in listF:
+    for current_file in tqdm(listF):
         current_fid = os.path.basename(current_file).split(".")[0]
         if df.query(f'ID == "{current_fid}"').empty and not df.query(f'ID == "{current_fid.lstrip("0")}"').empty:
             current_fid = current_fid.lstrip("0")
@@ -83,67 +94,172 @@ def batch_start_jobs(args):
 
     if args.slice:
         listF = listF[args.slice]
+
+    # processed = glob(os.path.join(out_dir, "*.h5"))
+    # missing = list(set([os.path.basename(p).split(".")[0] for p in listF]) - set([os.path.basename(p).split(".")[0] for p in processed]))
+    # missing = ["A1578_6 180654", "A2003_4 171947", "A2003_6 172141", "SSC_5013_1"]
+    # listF = [f for f in listF if os.path.basename(f).split(".")[0] in missing]
     # random.seed(12345)
     # random.shuffle(listF)
-    # n_per_batch = int(np.ceil(len(listF) / n_jobs))
-    # split_list = [listF[i:i+n_per_batch] for i in range(0, len(listF), n_per_batch)]
+    n_per_batch = int(np.floor(len(listF) / n_jobs))
+    split_list = [listF[i : i + n_per_batch] for i in range(0, len(listF), n_per_batch)]
     # test = ['A0005_4 175057', 'A0003_4 164611', 'A0013_6 182931', 'A0008_7 033111', 'A0009_4 171358', 'A0013_7 120409', 'A0008_4 171252', 'A0001_4 165907', 'A0001_5 180135']
-    print(f"Submitting {len(listF)} jobs...")
-    for current_file in listF:
-        # print(current_file)
-        # if not os.path.basename(current_file).split('.')[0] in test:
-        #     continue
-        content = f"""#!/bin/bash
+    if n_jobs:
+        print(f"Submitting {n_jobs} jobs...")
+
+        file_chunks = [[str(s) for s in arr] for arr in np.array_split(listF, n_jobs)]
+
+        for idx, current_filelist in enumerate(file_chunks):
+            log_filename = os.path.join(batch_log_dir, f"datasplit_{idx}")
+
+            with open(log_filename + "_files.txt", "w") as f:
+                f.writelines(line + "\n" for line in current_filelist)
+
+    #             content = f"""#!/bin/bash
+    # #
+    # #SBATCH --job-name="split_{idx}"
+    # #SBATCH -p mignot,owners,normal
+    # #SBATCH --time=00:30:00
+    # #SBATCH --cpus-per-task=2
+    # #SBATCH --mem=16GB
+    # #SBATCH --output="{log_filename}.out"
+    # #SBATCH --error="{log_filename}.err"
+    # ##################################################
+
+    # source $PI_HOME/miniconda3/bin/activate
+    # conda activate pl
+    # cd $HOME/sleep-staging
+
+    # python -c 'from batch_processing import batch_chunk_wrapper; batch_chunk_wrapper({fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}", "{log_filename}")'
+    # """
+    #             with tempfile.NamedTemporaryFile(delete=False) as j:
+    #                 j.write(content.encode())
+    #             os.system("sbatch {}".format(j.name))
+
+    else:
+        print(f"Submitting {len(listF)} jobs...")
+        for current_file in listF:
+            # print(current_file)
+            # if not os.path.basename(current_file).split('.')[0] in test:
+            #     continue
+            content = f"""#!/bin/bash
 #
 #SBATCH --job-name="{os.path.basename(current_file)}"
 #SBATCH -p mignot,owners,normal
-#SBATCH --time=00:05:00
+#SBATCH --time=00:10:00
 #SBATCH --cpus-per-task=2
-#SBATCH --output="/home/users/alexno/sleep-staging/batch/logs/{subset}/{encoding_type}/{os.path.basename(current_file)}.out"
-#SBATCH --error="/home/users/alexno/sleep-staging/batch/logs/{subset}/{encoding_type}/{os.path.basename(current_file)}.err"
+#SBATCH --output="{os.path.join(batch_log_dir, os.path.basename(current_file))}.out"
+#SBATCH --error="{os.path.join(batch_log_dir, os.path.basename(current_file))}.err"
 ##################################################
 
 source $PI_HOME/miniconda3/bin/activate
 conda activate stages
 cd $HOME/sleep-staging
 
-python -c 'from batch_processing import {process_fn.__name__}; {process_fn.__name__}("{current_file}", {fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}")'
+python -c 'from batch_processing import {process_fn.__name__}; {process_fn.__name__}("{current_file}", {fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}")'
 """
-        with tempfile.NamedTemporaryFile(delete=False) as j:
-            j.write(content.encode())
-        os.system("sbatch {}".format(j.name))
+            with tempfile.NamedTemporaryFile(delete=False) as j:
+                j.write(content.encode())
+            os.system("sbatch {}".format(j.name))
 
     print("All jobs have been submitted!")
 
 
-def batch_process_and_save(current_file, fs, seq_len, overlap, subset, encoding_type="raw"):
+def batch_chunk_wrapper(fs, seq_len, overlap, subset, encoding_type, out_dir, log_filename):
+    import traceback
+
+    with open(log_filename + "_files.txt", "r") as f:
+        filelist = [filename.rstrip() for filename in f.readlines()]
+
+    for fname in tqdm(filelist):
+        try:
+            M, L, W, Z, _, _ = process_single_file(fname, fs, seq_len, overlap, encoding=encoding_type)
+        except (MissingHypnogramError, MissingSignalsError, ReferencingError) as err:
+            print("Fejl!")
+            print(err)
+            with open(log_filename + ".txt", "a") as f:
+                f.write(str(err) + "\n")
+            continue
+        except Exception as err:
+            print("Fejl!")
+            print(err)
+            with open(log_filename + ".txt", "a") as f:
+                f.write(str(err) + "\n")
+            continue
+
+        try:
+            # Save to H5 file
+            if out_dir:
+                save_dir = out_dir
+            else:
+                save_dir = f"./data/{subset}/{encoding_type}/individual_encodings"
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            save_name = os.path.join(save_dir, os.path.basename(fname).split(".")[0] + ".h5")
+            chunks_M = (1,) + M.shape[1:]  # M.shape[1], M.shape[2])
+            chunks_L = (1,) + L.shape[1:]  # (1, L.shape[1], L.shape[2])
+            if W is not None:
+                chunks_W = (1,) + W.shape[1:]
+            if Z is not None:
+                chunks_Z = (1,) + Z.shape[1:]
+                # chunks_M = (M.shape[0], M.shape[1], 1)
+                # chunks_L = (L.shape[0], L.shape[1], 1)
+                # chunks_W = (W.shape[0], 1)
+            with File(save_name, "w") as f:
+                f.create_dataset("M", data=M, chunks=chunks_M)
+                f.create_dataset("L", data=L, chunks=chunks_L)
+                if W is not None:
+                    f.create_dataset("W", data=W, chunks=chunks_W)
+                if Z is not None:
+                    f.create_dataset("Z", data=Z, chunks=chunks_Z)
+        except Exception as err:
+            with open(log_filename + "_error.txt", "a") as f:
+                f.write(str(err) + "\n")
+            continue
+
+    return 0
+
+
+def batch_process_and_save(current_file, fs, seq_len, overlap, subset, encoding_type="raw", out_dir=None):
     import traceback
 
     try:
-        M, L, W, _, _ = process_single_file(current_file, fs, seq_len, overlap, encoding=encoding_type)
+        M, L, W, Z, _, _ = process_single_file(current_file, fs, seq_len, overlap, encoding=encoding_type)
     except MissingHypnogramError as err:
-        missing_path = f"./batch/{subset}/{encoding_type}/missing_hyp"
+        if out_dir:
+            missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "missing_hyp")
+        else:
+            missing_path = f"./batch/{subset}/{encoding_type}/missing_hyp"
         if not os.path.exists(missing_path):
             os.makedirs(missing_path)
         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
             f.write(str(err))
         return -1
     except MissingSignalsError as err:
-        missing_path = f"./batch/{subset}/{encoding_type}/missing_sigs"
+        if out_dir:
+            missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "missing_sigs")
+        else:
+            missing_path = f"./batch/{subset}/{encoding_type}/missing_sigs"
         if not os.path.exists(missing_path):
             os.makedirs(missing_path)
         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
             f.write(str(err))
         return -1
     except ReferencingError as err:
-        missing_path = f"./batch/{subset}/{encoding_type}/referencing"
+        if out_dir:
+            missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "referencing")
+        else:
+            missing_path = f"./batch/{subset}/{encoding_type}/referencing"
         if not os.path.exists(missing_path):
             os.makedirs(missing_path)
         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
             f.write(str(err))
         return -1
     except:
-        missing_path = f"./batch/{subset}/{encoding_type}/errs"
+        if out_dir:
+            missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "errs")
+        else:
+            missing_path = f"./batch/{subset}/{encoding_type}/errs"
         err = traceback.format_exc()
         if not os.path.exists(missing_path):
             os.makedirs(missing_path)
@@ -152,7 +268,10 @@ def batch_process_and_save(current_file, fs, seq_len, overlap, subset, encoding_
         return -1
 
     # Save to H5 file
-    save_dir = f"./data/{subset}/{encoding_type}/individual_encodings"
+    if out_dir:
+        save_dir = out_dir
+    else:
+        save_dir = f"./data/{subset}/{encoding_type}/individual_encodings"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     save_name = os.path.join(save_dir, os.path.basename(current_file).split(".")[0] + ".h5")
@@ -160,6 +279,8 @@ def batch_process_and_save(current_file, fs, seq_len, overlap, subset, encoding_
     chunks_L = (1,) + L.shape[1:]  # (1, L.shape[1], L.shape[2])
     if W is not None:
         chunks_W = (1,) + W.shape[1:]
+    if Z is not None:
+        chunks_Z = (1,) + Z.shape[1:]
         # chunks_M = (M.shape[0], M.shape[1], 1)
         # chunks_L = (L.shape[0], L.shape[1], 1)
         # chunks_W = (W.shape[0], 1)
@@ -168,13 +289,17 @@ def batch_process_and_save(current_file, fs, seq_len, overlap, subset, encoding_
         f.create_dataset("L", data=L, chunks=chunks_L)
         if W is not None:
             f.create_dataset("W", data=W, chunks=chunks_W)
+        if Z is not None:
+            f.create_dataset("Z", data=Z, chunks=chunks_Z)
 
 
 def batch_process_and_save_raw(current_file, fs, seq_len, overlap, subset, encoding_type="raw"):
     import traceback
 
     try:
-        M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(current_file, fs, seq_len, overlap, encoding=encoding_type)
+        M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(
+            current_file, fs, seq_len, overlap, encoding=encoding_type
+        )
     except MissingHypnogramError as err:
         missing_path = f"./batch/{subset}/{encoding_type}/missing_hyp"
         if not os.path.exists(missing_path):
@@ -411,16 +536,20 @@ def batch_mix_encodings(args):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
-    # parser.add_argument("--data_dir", type=str, default='/oak/stanford/groups/mignot/psg/SSC/APOE,/oak/stanford/groups/mignot/psg/WSC_EDF/')
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="/oak/stanford/groups/mignot/psg/SSC/APOE,/oak/stanford/groups/mignot/psg/WSC_EDF/",
+    )
     # parser.add_argument("--data_dir", type=str, default='/oak/stanford/groups/mignot/psg/SSC/APOE')
     # parser.add_argument("--data_dir", type=str, default='/oak/stanford/groups/mignot/psg/WSC_EDF/')
-    parser.add_argument("--data_dir", type=str, default="/oak/stanford/groups/mignot/psg/Korea (KHC)/SOMNO")
+    # parser.add_argument("--data_dir", type=str, default="/oak/stanford/groups/mignot/psg/Korea (KHC)/SOMNO")
+    parser.add_argument("--out_dir", type=str, default=None)
     parser.add_argument("--fs", type=int, default=100)
     parser.add_argument("--seq_len", type=int, default=1200)
     parser.add_argument("--overlap", type=int, default=400)
-    parser.add_argument("--n_jobs", type=int, default=200)
+    parser.add_argument("--n_jobs", type=int, default=None)
     parser.add_argument("--encoding_type", type=str, default="cc", choices=["cc", "raw"])
     parser.add_argument("--mix", action="store_true")
     parser.add_argument("--test", action="store_true")
@@ -432,7 +561,52 @@ if __name__ == "__main__":
         args.save_dir = "./data/batch_encodings"
         batch_mix_encodings(args)
     else:
-        batch_start_jobs(args)
+        # batch_chunk_wrapper(
+        #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_0",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_1",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_2",
+        # )
+        batch_chunk_wrapper(
+            128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_3",
+        )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_0",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_1",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_2",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_3",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_48",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_49",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_50",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_59",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_60",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_63",
+        # )
+        # batch_start_jobs(args)
         # batch_process_and_save("/oak/stanford/groups/mignot/psg/ISRC/AL_36_112108.edf", 100, 1200, 0, "test", "cc")
         # batch_process_and_save("/oak/stanford/groups/mignot/psg/SSC/APOE/SSC_1958_1.EDF", 128, 10, 0, "test", "raw")
+        # batch_process_and_save(
+        #     "/oak/stanford/groups/mignot/psg/WSC_EDF/A0031_4 171046.EDF", 128, 10, 5, "train", "raw", "data/full_length/ssc_wsc/raw/train"
+        # )
     # batch_process_and_save_encoding('/oak/stanford/groups/mignot/psg/SSC/APOE/SSC_1558_1.EDF', 100, 1200, 400)
