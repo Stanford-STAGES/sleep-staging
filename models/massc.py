@@ -277,8 +277,117 @@ class MasscModel(ptl.LightningModule):
 
     def validation_epoch_end(self, outputs):
 
-        return {'val_loss': torch.stack([x['eval_loss'] for x in outputs]).mean(),
-                'log': {k: torch.stack([x[k] for x in outputs]).mean() for k in outputs[0].keys()}}
+        true = torch.cat([out['true'] for out in outputs], dim=0).permute([0, 2, 1])
+        predicted = torch.cat([out['predicted'] for out in outputs], dim=0).permute([0, 2, 1])
+        stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in outputs], dim=0)
+        sequence_nrs = torch.cat([out['sequence_nr'] for out in outputs], dim=0)
+
+        if self.use_ddp:
+            out_true = [torch.zeros_like(true) for _ in range(torch.distributed.get_world_size())]
+            out_predicted = [torch.zeros_like(predicted) for _ in range(torch.distributed.get_world_size())]
+            out_stable_sleep = [torch.zeros_like(stable_sleep) for _ in range(torch.distributed.get_world_size())]
+            out_seq_nrs = [torch.zeros_like(sequence_nrs) for _ in range(dist.get_world_size())]
+            dist.barrier()
+            dist.all_gather(out_true, true)
+            dist.all_gather(out_predicted, predicted)
+            dist.all_gather(out_stable_sleep, stable_sleep)
+            dist.all_gather(out_seq_nrs, sequence_nrs)
+            if dist.get_rank() == 0:
+                t = torch.stack(out_true).transpose(0, 1).reshape(-1, 300, 5).cpu().numpy()
+                p = torch.stack(out_predicted).transpose(0, 1).reshape(-1, 300, 5).cpu().numpy()
+                s = torch.stack(out_stable_sleep).transpose(0, 1).reshape(-1, 300).to(torch.bool).cpu().numpy()
+                u = t.sum(axis=-1) == 1
+
+                acc = metrics.accuracy_score(t[s & u].argmax(-1), p[s & u].argmax(-1))
+                cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
+                f1_macro = metrics.f1_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
+
+                self.log_dict({
+                    'eval_acc': acc,
+                    'eval_cohen': cohen,
+                    'eval_f1_macro': f1_macro,
+                }, prog_bar=True)
+        elif self.on_gpu:
+            t = true.cpu().numpy()
+            p = predicted.cpu().numpy()
+            s = stable_sleep.to(torch.bool).cpu().numpy()
+            u = t.sum(axis=-1) == 1
+
+            acc = metrics.accuracy_score(t[s & u].argmax(-1), p[s & u].argmax(-1))
+            cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
+            f1_macro = metrics.f1_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
+
+            self.log_dict({
+                'eval_acc': acc,
+                'eval_cohen': cohen,
+                'eval_f1_macro': f1_macro
+            }, prog_bar=True)
+        else:
+            t = true.numpy()
+            p = predicted.numpy()
+            s = stable_sleep.to(torch.bool).numpy()
+            u = t.sum(axis=-1) == 1
+
+
+            acc = metrics.accuracy_score(t[s & u].argmax(-1), p[s & u].argmax(-1))
+            cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
+            f1_macro = metrics.f1_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
+
+            self.log_dict({
+                'eval_acc': acc,
+                'eval_cohen': cohen,
+                'eval_f1_macro': f1_macro
+            }, prog_bar=True)
+
+
+
+    #     try:
+    #         all_records = self.trainer.datamodule.eval.records
+
+    #     # try:
+    #     #     all_records = self.test_dataloader.dataloader.dataset.records  # When running a new dataset
+    #     # except AttributeError:
+    #     #     all_records = self.test_data.records  # When running on the train data
+    #     results = {r: {
+    #             "true": [],
+    #             "predicted": [],
+    #             "stable_sleep": [],
+    #             # 'acc': None,
+    #             # 'f1': None,
+    #             # 'recall': None,
+    #             # 'precision': None,
+    #         } for r in all_records
+    #     }
+
+    #     for r in all_records:
+    #         if isinstance(outputs, dict):
+    #             current_record = {k: v for k, v in outputs.items() if k != 'meta'}
+    #             current_record = [dict(zip(current_record, t)) for t in zip(*current_record.values())]
+    #             current_record = sorted([v for v in current_record if v["record"][0] == r], key=lambda x: x["sequence_nr"])
+    #         elif isinstance(outputs, list):
+    #             current_record = sorted([v for v in outputs if v["record"][0] == r], key=lambda x: x["sequence_nr"])
+    #         if not current_record:
+    #             results.pop(r, None)
+    #             continue
+    #         y = torch.cat([v["predicted"] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.hparams.n_classes, -1)
+    #         t = torch.cat([v["true"] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.hparams.n_classes, -1)
+    #         stable_sleep = torch.cat([v["stable_sleep"] for v in current_record], dim=0).flatten()
+    #         # y_label = y.argmax(dim=0)
+    #         # t_label = t.argmax(dim=0)
+    #         # cm = ptl.metrics.ConfusionMatrix()(y_label, t_label)
+    #         # acc = ptl.metrics.Accuracy()(y_label, t_label)
+    #         # f1 = ptl.metrics.F1(reduction='none')(y_label, t_label)
+    #         # precision = ptl.metrics.Precision(reduction='none')(y_label, t_label)
+    #         # recall = ptl.metrics.Recall(reduction='none')(y_label, t_label)
+    #         results[r]["true"] = t.cpu().numpy()
+    #         # results[r]["true_label"] = t_label.cpu().numpy()
+    #         results[r]["predicted"] = y.cpu().numpy()
+    #         results[r]['stable_sleep'] = stable_sleep.cpu().numpy()
+
+    #     return {
+    #         "val_loss": torch.stack([x["eval_loss"] for x in outputs]).mean(),
+    #         "log": {k: torch.stack([x[k] for x in outputs]).mean() for k in outputs[0].keys()},
+    #     }
 
     def test_step(self, batch, batch_index):
 
