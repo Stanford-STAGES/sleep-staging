@@ -11,6 +11,7 @@ from sklearn.metrics import (
     recall_score,
     precision_recall_fscore_support,
 )
+from tqdm import tqdm
 
 
 def transition_matrix(y, n_classes=5, eval_frequency=[30]):
@@ -39,54 +40,67 @@ def evaluate_performance(record_predictions, evaluation_windows=[1, 3, 5, 10, 15
     records = [r for r in record_predictions.keys()]
     ids = [r.split(".")[0] for r in records]
     df_total = []
-    confmat_subject = {record: {eval_window: None for eval_window in evaluation_windows} for record in records}
-    confmat_total = {eval_window: np.zeros((5, 5)) for eval_window in evaluation_windows}
+    confmat_subject = {record: {eval_window: {case: None for case in cases} for eval_window in evaluation_windows} for record in records}
+    confmat_total = {eval_window: {case: np.zeros((5, 5)) for case in cases} for eval_window in evaluation_windows}
     for eval_window in evaluation_windows:
-        df = pd.DataFrame()
-        df["FileID"] = records
-        df["SubjectID"] = ids
-        df["Window"] = f"{eval_window} s"
-        for idx, record in enumerate(records):
+        for case in cases:
+            df = pd.DataFrame()
+            df["FileID"] = records
+            df["SubjectID"] = ids
+            df["Window"] = f"{eval_window} s"
+            df["Case"] = case
+            print('')
+            print(f'Evaluation window: {eval_window} | Case: {case}')
+            for idx, record in enumerate(tqdm(records)):
+                not_unknown_stage = record_predictions[record]['true'].sum(axis=1) == 1
 
-            # Get the true and predicted stages
-            t = record_predictions[record]["true"].argmax(axis=0)[::eval_window]
-            p = np.mean(record_predictions[record]["predicted"].reshape(5, -1, eval_window), axis=2).argmax(axis=0)
+                if case == 'all':
+                    extract = np.full(record_predictions[record]['true'].shape[0], True) & not_unknown_stage
+                elif case == 'stable':
+                    extract = record_predictions[record]['stable_sleep'] & not_unknown_stage
+                elif case == 'transition':
+                    not_unknown_stage = record_predictions[record]['true'].sum(axis=1) == 1
+                    extract = np.invert(record_predictions[record]['stable_sleep']) & not_unknown_stage
 
-            # Extract the metrics
-            acc = accuracy_score(t, p)
-            bal_acc = balanced_accuracy_score(t, p)
-            kappa = cohen_kappa_score(t, p)
+                # Get the true and predicted stages
+                t = record_predictions[record]["true"][extract, :].argmax(axis=1)[::eval_window]
+                p = np.mean(record_predictions[record]["predicted"][extract, :].reshape(-1, eval_window, 5), axis=1).argmax(axis=1)
+
+                # Extract the metrics
+                acc = accuracy_score(t, p)
+                bal_acc = balanced_accuracy_score(t, p)
+                kappa = cohen_kappa_score(t, p)
                 f1 = f1_score(t, p, average="macro")
                 prec = precision_score(t, p, average="macro")
                 recall = recall_score(t, p, average="macro")
-            mcc = matthews_corrcoef(t, p)
+                mcc = matthews_corrcoef(t, p)
 
-            # Assign metrics to dataframe
-            df.loc[idx, "Accuracy"] = acc
-            df.loc[idx, "Balanced accuracy"] = bal_acc
-            df.loc[idx, "Kappa"] = kappa
-            df.loc[idx, "F1"] = f1
-            df.loc[idx, "Precision"] = prec
-            df.loc[idx, "Recall"] = recall
-            df.loc[idx, "MCC"] = mcc
+                # Assign metrics to dataframe
+                df.loc[idx, "Accuracy"] = acc
+                df.loc[idx, "Balanced accuracy"] = bal_acc
+                df.loc[idx, "Kappa"] = kappa
+                df.loc[idx, "F1"] = f1
+                df.loc[idx, "Precision"] = prec
+                df.loc[idx, "Recall"] = recall
+                df.loc[idx, "MCC"] = mcc
 
-            # Get stage-specific metrics
-            precision, recall, f1, support = precision_recall_fscore_support(t, p, labels=[0, 1, 2, 3, 4])
+                # Get stage-specific metrics
+                precision, recall, f1, support = precision_recall_fscore_support(t, p, labels=[0, 1, 2, 3, 4])
 
-            # Assign to dataframe
-            for stage_idx, stage in zip([0, 1, 2, 3, 4], ["W", "N1", "N2", "N3", "REM"]):
-                df.loc[idx, f"F1 - {stage}"] = f1[stage_idx]
-                df.loc[idx, f"Precision - {stage}"] = precision[stage_idx]
-                df.loc[idx, f"Recall - {stage}"] = recall[stage_idx]
-                df.loc[idx, f"Support - {stage}"] = support[stage_idx]
+                # Assign to dataframe
+                for stage_idx, stage in zip([0, 1, 2, 3, 4], ["W", "N1", "N2", "N3", "REM"]):
+                    df.loc[idx, f"F1 - {stage}"] = f1[stage_idx]
+                    df.loc[idx, f"Precision - {stage}"] = precision[stage_idx]
+                    df.loc[idx, f"Recall - {stage}"] = recall[stage_idx]
+                    df.loc[idx, f"Support - {stage}"] = support[stage_idx]
 
-            # Get confusion matrix
-            C = confusion_matrix(t, p, labels=[0, 1, 2, 3, 4])
-            confmat_subject[record][eval_window] = C
-            confmat_total[eval_window] += C
+                # Get confusion matrix
+                C = confusion_matrix(t, p, labels=[0, 1, 2, 3, 4])
+                confmat_subject[record][eval_window][case] = C
+                confmat_total[eval_window][case] += C
 
-        # Update list
-        df_total.append(df)
+            # Update list
+            df_total.append(df)
 
     # Finalize dataframe
     df_total = pd.concat(df_total)
