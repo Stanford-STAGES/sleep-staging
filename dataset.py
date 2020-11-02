@@ -12,11 +12,14 @@ from torch.utils.data import Dataset
 from torch.utils.data import Subset
 from tqdm import tqdm
 
-from utils import ParallelExecutor, load_h5_data
+try:
+    from utils import ParallelExecutor, load_h5_data
+except ImportError:
+    from utils.h5_utils import load_h5_data
+    from utils.parallel_bar import ParallelExecutor
 
 
 class StagesData(Dataset):
-
     def __init__(self, data_dir=None, batch_size=15, n_classes=5, n_jobs=-1, num_steps=None, seg_size=None):
         super().__init__()
         self.data_dir = data_dir
@@ -38,39 +41,30 @@ class StagesData(Dataset):
         self.current_position = None
         print(self.record_to_index)
         # data = load_h5_data(os.path.join(self.data_dir, self.records[0]))
-        self.cache_dir = 'data/.cache'
-        memory = Memory(self.cache_dir, mmap_mode='r', verbose=0)
+        self.cache_dir = "data/.cache"
+        memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
         get_data = memory.cache(load_h5_data)
 
-        print(f'Loading mmap data using {n_jobs} workers:')
+        print(f"Loading mmap data using {n_jobs} workers:")
         data = ParallelExecutor(n_jobs=n_jobs, prefer="threads")(total=len(self.records))(
             delayed(get_data)(filename=os.path.join(self.data_dir, record), seg_size=self.seg_size) for record in self.records
         )
         # print('Processing...')
         self.index_matrix = []
-        for record, d in zip(tqdm(self.records, desc='Processing'), data):
+        for record, d in zip(tqdm(self.records, desc="Processing"), data):
             seqs_in_file = d[3]
-            self.data[record] = {'data': d[0], 'target': d[1], 'weights': d[2]}
+            self.data[record] = {"data": d[0], "target": d[1], "weights": d[2]}
             self.record_indices[record] = np.arange(seqs_in_file)
-            self.index_to_record.extend(
-                [
-                    {'record': record, 'idx': x} for x in range(seqs_in_file)
-                ]
-            )
+            self.index_to_record.extend([{"record": record, "idx": x} for x in range(seqs_in_file)])
             self.batch_indices.extend(
-                [
-                    {'record': record, 'range': np.arange(v, v + self.batch_size)} for v in range(0, seqs_in_file, self.batch_size)
-                ]
+                [{"record": record, "range": np.arange(v, v + self.batch_size)} for v in range(0, seqs_in_file, self.batch_size)]
             )
-            self.record_to_index.append(
-                {'record': record, 'range': np.arange(seqs_in_file)})
+            self.record_to_index.append({"record": record, "range": np.arange(seqs_in_file)})
             # Define a matrix of indices
-            self.index_matrix.extend(
-                [np.arange(seqs_in_file)]
-            )
+            self.index_matrix.extend([np.arange(seqs_in_file)])
             # print(record)
         self.index_matrix = np.stack(self.index_matrix)
-        print('Finished loading data')
+        print("Finished loading data")
 
         # # Define a matrix of indices
         # self.index_matrix = np.stack(
@@ -92,9 +86,9 @@ class StagesData(Dataset):
 
     def batch_data(self):
         self.batch_indices = []
-        self.batch_indices.extend([
-            {'range': split, 'record': k} for k, v in self.record_indices.items() for split in np.split(v, 300 / self.batch_size)
-        ])
+        self.batch_indices.extend(
+            [{"range": split, "record": k} for k, v in self.record_indices.items() for split in np.split(v, 300 / self.batch_size)]
+        )
 
     def shuffle_records(self):
         random.shuffle(self.records)
@@ -133,12 +127,13 @@ class StagesData(Dataset):
 
     def get_record(self):
         # if not self.loaded_record:
-        self.loaded_record = {'data': self.data[self.current_record]['data'],
-                              'target': self.data[self.current_record]['target'],
-                              'weights': self.data[self.current_record]['weights'],
-                              'record': self.current_record,
-                              'current_pos': 0,
-                              }
+        self.loaded_record = {
+            "data": self.data[self.current_record]["data"],
+            "target": self.data[self.current_record]["target"],
+            "weights": self.data[self.current_record]["weights"],
+            "record": self.current_record,
+            "current_pos": 0,
+        }
         # }
         # elif self.loaded_record['record'] != self.current_record:
         # self.
@@ -172,17 +167,17 @@ class StagesData(Dataset):
             #     self.set_next()
 
             # Grab data
-            current_record = self.batch_indices[idx]['record']
-            samples = self.batch_indices[idx]['range']
+            current_record = self.batch_indices[idx]["record"]
+            samples = self.batch_indices[idx]["range"]
 
             # Grab data
             # current_record = self.current_record
             # current_pos = self.current_position
             # samples = self.record_indices[current_record][current_pos:current_pos+self.batch_size]
-            x = self.data[current_record]['data'][samples]
-            t = self.data[current_record]['target'][samples]
+            x = self.data[current_record]["data"][samples]
+            t = self.data[current_record]["target"][samples]
             # x = self.loaded_record['data'][samples]
-            w = self.data[current_record]['weights'][samples]
+            w = self.data[current_record]["weights"][samples]
             # t = self.loaded_record['target'][samples]
             # w = self.loaded_record['weights'][samples]
 
@@ -207,10 +202,10 @@ class StagesData(Dataset):
             # t = self.data[record]['target'][record_idx, :, :]
             # w = self.data[record]['weights'][record_idx, :]
         except IndexError:
-            print('Bug')
+            print("Bug")
 
         if np.isnan(x).any():
-            print('NaNs detected!')
+            print("NaNs detected!")
             x[np.isnan(x)] = 2 ** -23
             x[np.isinf(x)] = 2 ** -23
 
@@ -230,6 +225,7 @@ Number of records: {len(self.records)}
 """
 
         return s
+
 
 # def collate_fn(batch):
 #
@@ -251,12 +247,11 @@ def collate_fn(batch):
 
 
 class Subset(Dataset):
-    def __init__(self, dataset, record_indices, name='Train'):
+    def __init__(self, dataset, record_indices, name="Train"):
         self.dataset = dataset
         self.record_indices = record_indices
         self.records = [self.dataset.records[idx] for idx in self.record_indices]
-        self.batch_indices = [idx for idx, v in enumerate(
-            self.dataset.batch_indices) for r in self.records if v['record'] == r]
+        self.batch_indices = [idx for idx, v in enumerate(self.dataset.batch_indices) for r in self.records if v["record"] == r]
         self.name = name
 
     def __getitem__(self, idx):
@@ -279,12 +274,11 @@ Records: {self.records}
         return s
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     from tqdm import tqdm
 
-    dataset_params = dict(data_dir='./data/batch_encodings', batch_size=30,
-                          num_steps=50000, n_jobs=1, n_classes=5, seg_size=60)
+    dataset_params = dict(data_dir="./data/batch_encodings", batch_size=30, num_steps=50000, n_jobs=1, n_classes=5, seg_size=60)
     dataset = StagesData(**dataset_params)
     train_data, eval_data = dataset.split_data(0.1)
     print(train_data)
