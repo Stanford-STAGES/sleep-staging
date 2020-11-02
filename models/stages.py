@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as ptl
 from pytorch_lightning.metrics import Accuracy
-from pytorch_lightning.metrics import F1
+#from pytorch_lightning.metrics import F1
 from pytorch_lightning.metrics import Precision
 from pytorch_lightning.metrics import Recall
 
