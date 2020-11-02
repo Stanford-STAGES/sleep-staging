@@ -1,20 +1,28 @@
 import math
 import os
 import random
+import warnings
 from itertools import compress
+from pprint import pprint
 
 import numpy as np
 import torch
+import pytorch_lightning as pl
 from h5py import File
 from joblib import delayed
 from joblib import Memory
 from joblib import Parallel
+from sklearn.preprocessing import *
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from torch.utils.data import Subset
 from tqdm import tqdm
 
+try:
 from utils import ParallelExecutor, load_h5_data
+except ImportError:
+    from utils.h5_utils import load_h5_data
+    from utils.parallel_bar import ParallelExecutor
 
 
 def load_psg_h5_data(filename):
