@@ -6,6 +6,15 @@ from sklearn.preprocessing import *
 SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
 
 
+def get_h5_info(filename):
+
+    with File(filename, "r") as h5:
+        dataT = h5["trainD"]
+        seqs_in_file = dataT.shape[0]
+
+    return seqs_in_file
+
+
 def load_h5_data(filename, seg_size):
 
     with File(filename, "r") as h5:
@@ -13,6 +22,8 @@ def load_h5_data(filename, seg_size):
         dataT = h5["trainD"][:].astype("float32")
         targetT = h5["trainL"][:].astype("float32")
         weights = h5["trainW"][:].astype("float32")
+        # dataT = h5["trainD"]
+        # print("hej")
 
     # Hack to make sure axis order is preserved
     if dataT.shape[-1] == 300:
@@ -26,11 +37,18 @@ def load_h5_data(filename, seg_size):
     # print(f'{filename} loaded - Training')
 
     seq_in_file = dataT.shape[0]
-    n_segs = dataT.shape[1] // seg_size
+    # n_segs = dataT.shape[1] // seg_size
+    n_segs = dataT.shape[-1] // seg_size
 
+    # return (
+    #     np.reshape(dataT, [seq_in_file, n_segs, seg_size, -1]),
+    #     np.reshape(targetT, [seq_in_file, n_segs, seg_size, -1]),
+    #     np.reshape(weights, [seq_in_file, n_segs, seg_size]),
+    #     seq_in_file,
+    # )
     return (
-        np.reshape(dataT, [seq_in_file, n_segs, seg_size, -1]),
-        np.reshape(targetT, [seq_in_file, n_segs, seg_size, -1]),
+        np.reshape(dataT, [seq_in_file, -1, n_segs, seg_size]),
+        np.reshape(targetT, [seq_in_file, -1, n_segs, seg_size]),
         np.reshape(weights, [seq_in_file, n_segs, seg_size]),
         seq_in_file,
     )
