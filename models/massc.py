@@ -222,11 +222,11 @@ class MasscModel(ptl.LightningModule):
         # return {"loss": loss, "log": {**dict(train_loss=loss), **metrics}}
         X, y, current_record, current_sequence, stable_sleep = batch
         loss, y_hat = self.shared_step(X, y, stable_sleep)
-        self.compute_metrics(y.transpose(2, 1)[stable_sleep], y_hat.transpose(2, 1)[stable_sleep])
+        # self.compute_metrics(y.transpose(2, 1)[stable_sleep], y_hat.transpose(2, 1)[stable_sleep])
         # self.train_acc()
         # metrics = self.compute_metrics(y.transpose(2, 1)[stable_sleep], y_hat.transpose(2, 1)[stable_sleep])
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('train_acc', self.train_acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        # self.log('train_acc', self.train_acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
         # metrics = {}
@@ -260,7 +260,7 @@ class MasscModel(ptl.LightningModule):
         # return {'val_loss': loss, 'val_acc': acc, 'val_baseline': baseline}
         X, y, current_record, current_sequence, stable_sleep = batch
         loss, y_hat = self.shared_step(X, y, stable_sleep)
-        self.log('eval_loss', loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log('eval_loss', loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         # result = ptl.EvalResult(checkpoint_on=loss)
         # result.log('eval_loss', loss, prog_bar=True, sync_dist=True) # log every epoch
         # result.log_dict(metrics, sync_dist=True) # log every epoch
@@ -409,8 +409,10 @@ class MasscModel(ptl.LightningModule):
 
     def test_epoch_end(self, output_results):
         """This method collects the results and sorts the predictions according to record and sequence nr."""
-
-        all_records = sorted(self.trainer.datamodule.test.records)
+        try:
+            all_records = sorted(self.trainer.datamodule.test.records)
+        except AttributeError: # Catch exception if we've supplied dataloaders instead of DataModule
+            all_records = sorted(self.trainer.test_dataloaders[0].dataset.records)
         true = torch.cat([out['true'] for out in output_results], dim=0).permute([0, 2, 1])
         predicted = torch.cat([out['predicted'] for out in output_results], dim=0).permute([0, 2, 1])
         stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in output_results], dim=0)
