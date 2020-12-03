@@ -49,7 +49,7 @@ def batch_start_jobs(args):
 
     if out_dir:
         # batch_log_dir = os.path.join("/home/users/alexno/sleep-staging", out_dir, "logs")
-        batch_log_dir = os.path.join("logs", "preprocessing")
+        batch_log_dir = os.path.join("logs", "preprocessing", encoding_type)
     else:
         batch_log_dir = os.path.join("/home/users/alexno/sleep-staging/batch/logs", subset, encoding_type)
     os.makedirs(batch_log_dir, exist_ok=True)
@@ -105,7 +105,7 @@ def batch_start_jobs(args):
     split_list = [listF[i : i + n_per_batch] for i in range(0, len(listF), n_per_batch)]
     # test = ['A0005_4 175057', 'A0003_4 164611', 'A0013_6 182931', 'A0008_7 033111', 'A0009_4 171358', 'A0013_7 120409', 'A0008_4 171252', 'A0001_4 165907', 'A0001_5 180135']
     if n_jobs:
-        print(f"Submitting {n_jobs} jobs...")
+        print(f"Submitting {n_jobs} job(s)...")
 
         file_chunks = [[str(s) for s in arr] for arr in np.array_split(listF, n_jobs)]
 
@@ -115,26 +115,26 @@ def batch_start_jobs(args):
             with open(log_filename + "_files.txt", "w") as f:
                 f.writelines(line + "\n" for line in current_filelist)
 
-    #             content = f"""#!/bin/bash
-    # #
-    # #SBATCH --job-name="split_{idx}"
-    # #SBATCH -p mignot,owners,normal
-    # #SBATCH --time=00:30:00
-    # #SBATCH --cpus-per-task=2
-    # #SBATCH --mem=16GB
-    # #SBATCH --output="{log_filename}.out"
-    # #SBATCH --error="{log_filename}.err"
-    # ##################################################
+                content = f"""#!/bin/bash
+#
+#SBATCH --job-name="s_{idx}"
+#SBATCH -p mignot,owners,normal
+#SBATCH --time=02:30:00
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=16GB
+#SBATCH --output="{log_filename}.out"
+#SBATCH --error="{log_filename}.err"
+##################################################
 
-    # source $PI_HOME/miniconda3/bin/activate
-    # conda activate pl
-    # cd $HOME/sleep-staging
+source $PI_HOME/miniconda3/bin/activate
+conda activate pl
+cd $HOME/sleep-staging
 
-    # python -c 'from batch_processing import batch_chunk_wrapper; batch_chunk_wrapper({fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}", "{log_filename}")'
-    # """
-    #             with tempfile.NamedTemporaryFile(delete=False) as j:
-    #                 j.write(content.encode())
-    #             os.system("sbatch {}".format(j.name))
+python -c 'from batch_processing import batch_chunk_wrapper; batch_chunk_wrapper({fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}", "{log_filename}")'
+"""
+                with tempfile.NamedTemporaryFile(delete=False) as j:
+                    j.write(content.encode())
+                os.system("sbatch {}".format(j.name))
 
     else:
         print(f"Submitting {len(listF)} jobs...")
@@ -445,13 +445,16 @@ def batch_mix_encodings(args):
             # if os.path.basename(current_file).split('.')[0] != 'A1039_3 164125':
             #     continue
 
-            pbar.set_description(current_file)
+            pbar.set_description(os.path.basename(current_file))
 
             def load_h5(filename):
                 with File(filename, "r") as f:
                     M = f["M"][:].astype(np.float32)
                     L = f["L"][:].astype(np.float32)
                     W = f["W"][:].astype(np.float32)
+
+                if L.shape[-1] == 1:
+                    L.squeeze(axis=-1)
                 return M, L, W
 
             M, L, W = load_h5(current_file)
@@ -462,17 +465,17 @@ def batch_mix_encodings(args):
                 label_stack = L
                 weight_stack = W
             else:
-                data_stack = np.concatenate([data_stack, M], axis=-1)
-                label_stack = np.concatenate([label_stack, L], axis=-1)
-                weight_stack = np.concatenate([weight_stack, W], axis=-1)
+                data_stack = np.concatenate([data_stack, M], axis=0)
+                label_stack = np.concatenate([label_stack, L], axis=0)
+                weight_stack = np.concatenate([weight_stack, W], axis=0)
 
-        if data_stack.shape[-1] > 900 | (i == len(h5_files) - 1 & data_stack.shape[-1] > 300):
+        if data_stack.shape[0] > 900 | (i == len(h5_files) - 1 & data_stack.shape[0] > 300):
 
             if not os.path.exists(save_dir):
-                os.mkdir(save_dir)
+                os.makedirs(save_dir)
 
             # Shuffle the data
-            ind = np.random.permutation(data_stack.shape[-1])
+            ind = np.random.permutation(data_stack.shape[0])
             # while True:
             #     # from time import time
             #     start = time()
@@ -494,12 +497,18 @@ def batch_mix_encodings(args):
             save_name = save_names.pop(0)
             pbar.write(f"Writing to file: {save_name}")
             with File(save_name, "w") as f:
-                dset_data = f.create_dataset("trainD", (data_stack.shape[0], seq_len, 300), dtype="f4")
-                dset_labels = f.create_dataset("trainL", (5, seq_len, 300), dtype="f4")
-                dset_weights = f.create_dataset("trainW", (seq_len, 300), dtype="f4")
-                dset_data[:] = np.take(data_stack, ind[:300], axis=-1)
-                dset_labels[:] = np.take(label_stack, ind[:300], axis=-1)
-                dset_weights[:] = np.take(weight_stack, ind[:300], axis=-1)
+                dset_data = f.create_dataset(
+                    "trainD", (300,) + data_stack.shape[1:], dtype="f4", chunks=(1,) + data_stack.shape[1:]
+                )
+                dset_labels = f.create_dataset(
+                    "trainL", (300,) + label_stack.shape[1:], dtype="f4", chunks=(1,) + label_stack.shape[1:]
+                )
+                dset_weights = f.create_dataset(
+                    "trainW", (300,) + weight_stack.shape[1:], dtype="f4", chunks=(1,) + weight_stack.shape[1:]
+                )
+                dset_data[:] = np.take(data_stack, ind[:300], axis=0)
+                dset_labels[:] = np.take(label_stack, ind[:300], axis=0)
+                dset_weights[:] = np.take(weight_stack, ind[:300], axis=0)
                 # f.create_dataset('trainD', data=np.take(data_stack, ind[:300], axis=-1))# (data_stack.shape[0], seq_len, 300))
                 # f.create_dataset('trainL', data=np.take(label_stack, ind[:300], axis=-1))#(data_stack.shape[0], seq_len, 300))
                 # f.create_dataset('trainW', data=np.take(weight_stack, ind[:300], axis=-1))#(data_stack.shape[0], seq_len, 300))
@@ -511,9 +520,9 @@ def batch_mix_encodings(args):
             # data_stack = np.delete(data_stack, range(300), axis=-1)
             # label_stack = np.delete(label_stack, range(300), axis=-1)
             # weight_stack = np.delete(weight_stack, range(300), axis=-1)
-            data_stack = np.delete(data_stack, ind[:300], axis=-1)
-            label_stack = np.delete(label_stack, ind[:300], axis=-1)
-            weight_stack = np.delete(weight_stack, ind[:300], axis=-1)
+            data_stack = np.delete(data_stack, ind[:300], axis=0)
+            label_stack = np.delete(label_stack, ind[:300], axis=0)
+            weight_stack = np.delete(weight_stack, ind[:300], axis=0)
 
     # if not os.path.exists('./txt'):
     #     os.mkdir('./txt')
@@ -549,7 +558,7 @@ if __name__ == "__main__":
     parser.add_argument("--fs", type=int, default=100)
     parser.add_argument("--seq_len", type=int, default=1200)
     parser.add_argument("--overlap", type=int, default=400)
-    parser.add_argument("--n_jobs", type=int, default=None)
+    parser.add_argument("--n_jobs", type=int, default=1)
     parser.add_argument("--encoding_type", type=str, default="cc", choices=["cc", "raw"])
     parser.add_argument("--mix", action="store_true")
     parser.add_argument("--test", action="store_true")
@@ -557,10 +566,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.mix:
-        args.encoding_dir = "./data/individual_encodings"
-        args.save_dir = "./data/batch_encodings"
+        args.encoding_dir = args.data_dir
+        args.save_dir = args.out_dir
+        # args.encoding_dir = "./data/individual_encodings"
+        # args.save_dir = "./data/batch_encodings"
         batch_mix_encodings(args)
     else:
+        # batch_chunk_wrapper(
+        #     100, 1200, 400, "train", "cc", "/oak/stanford/groups/mignot/alexno/data/sleep-staging/ssc_wsc/cc/5min/single", "logs/preprocessing/cc/datasplit_7",
+        # )
+        # batch_chunk_wrapper(
+        #     100, 1200, 400, "train", "cc", "/oak/stanford/groups/mignot/alexno/data/sleep-staging/ssc_wsc/cc/5min/single", "logs/preprocessing/cc/datasplit_0",
+        # )
         # batch_chunk_wrapper(
         #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_0",
         # )
@@ -570,9 +587,9 @@ if __name__ == "__main__":
         # batch_chunk_wrapper(
         #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_2",
         # )
-        batch_chunk_wrapper(
-            128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_3",
-        )
+        # batch_chunk_wrapper(
+        #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_3",
+        # )
         # batch_chunk_wrapper(
         #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_0",
         # )
@@ -603,7 +620,7 @@ if __name__ == "__main__":
         # batch_chunk_wrapper(
         #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_63",
         # )
-        # batch_start_jobs(args)
+        batch_start_jobs(args)
         # batch_process_and_save("/oak/stanford/groups/mignot/psg/ISRC/AL_36_112108.edf", 100, 1200, 0, "test", "cc")
         # batch_process_and_save("/oak/stanford/groups/mignot/psg/SSC/APOE/SSC_1958_1.EDF", 128, 10, 0, "test", "raw")
         # batch_process_and_save(
