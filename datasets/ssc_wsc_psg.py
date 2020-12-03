@@ -254,14 +254,18 @@ class SscWscPsgDataset(Dataset):
         # eval_data = SscWscPsgSubset(self, np.arange(0, n_eval), name="Validation")
         # else:
         if self.cv:
-            from sklearn.model_selection import KFold
+            from sklearn.model_selection import KFold, StratifiedKFold
 
-            kf = KFold(n_splits=np.abs(self.cv))
+            # kf = KFold(n_splits=np.abs(self.cv))
+            ssc_idx = ["SSC" in s for s in np.array(self.records)[train_idx]]
+            kf = StratifiedKFold(n_splits=np.abs(self.cv))
             if self.cv > 0:
                 # train_idx, eval_idx = list(kf.split(np.arange(n_records)))[self.cv_idx]
-                _, train_idx = list(kf.split(train_idx))[self.cv_idx]
+                _, train_idx = list(kf.split(train_idx, ssc_idx))[self.cv_idx]
             else:
-                eval_idx, train_idx = list(kf.split(np.arange(n_records)))[self.cv_idx]
+                # eval_idx, train_idx = list(kf.split(np.arange(n_records)))[self.cv_idx]
+                # train_idx, _ = list(kf.split(np.arange(n_records)))[self.cv_idx]
+                train_idx, _ = list(kf.split(train_idx, ssc_idx))[self.cv_idx]
             print("\n")
             print(f"Running {np.abs(self.cv)}-fold cross-validation procedure.")
             print(f"Current split: {self.cv_idx}")
@@ -380,7 +384,7 @@ class SscWscDataModule(pl.LightningDataModule):
         eval_ratio=0.1,
         n_workers=0,
         n_jobs=-1,
-        n_records=-1,
+        n_records=None,
         scaling="robust",
         adjustment=None,
         **kwargs,
@@ -423,7 +427,7 @@ class SscWscDataModule(pl.LightningDataModule):
             shuffle=True,
             num_workers=self.n_workers,
             pin_memory=True,
-            drop_last=True,
+            # drop_last=True,
         )
 
     def val_dataloader(self):
@@ -434,7 +438,7 @@ class SscWscDataModule(pl.LightningDataModule):
             shuffle=False,
             num_workers=self.n_workers,
             pin_memory=True,
-            drop_last=True,
+            # drop_last=True,
         )
 
     def test_dataloader(self):
@@ -475,10 +479,25 @@ if __name__ == "__main__":
     random.seed(42)
 
     # dataset_params = dict(data_dir="./data/raw/individual_encodings", n_jobs=1, scaling="robust", n_records=10)
-    dataset_params = dict(data_dir="./data/full_length/ssc_wsc/raw/train", n_jobs=1, scaling="robust", n_records=10,)
-    dataset = SscWscPsgDataset(**dataset_params)
-    print(dataset)
-    train_data, eval_data = dataset.split_data(0.1)
+    # dataset_params = dict(data_dir="./data/ssc_wsc/raw/5min", n_jobs=1, scaling="robust", n_records=10,)
+    # dataset = SscWscPsgDataset(**dataset_params)
+    dm_params = dict(
+        batch_size=32,
+        n_workers=0,
+        data_dir="./data/ssc_wsc/raw/5min",
+        eval_ratio=0.1,
+        n_records=None,
+        scaling="robust",
+        adjustment=15,
+        cv=-3,
+        cv_idx=0,
+        n_jobs=-1,
+    )
+    dm = SscWscDataModule(**dm_params)
+    dm.setup("fit")
+    # print(dataset)
+    print(dm)
+    # train_data, eval_data = dataset.split_data(0.1)
     print(train_data)
     pbar = tqdm(DataLoader(train_data, batch_size=32, shuffle=True, num_workers=0, pin_memory=True))
     for idx, (x, t) in enumerate(pbar):
