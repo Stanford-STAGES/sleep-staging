@@ -12,9 +12,9 @@ import pandas as pd
 import scipy
 import scipy.io as sio
 import skimage
-import pyfftw
+# import pyfftw
 from h5py import File
-from numba import jit
+# from numba import jit
 
 # from mkl_fft._scipy_fft import fft
 # from mkl_fft._scipy_fft import fftshift
@@ -521,6 +521,8 @@ def encode_data(x1, x2, dim, slide, fs):
     try:
         # start = time()
         C = C[..., :] / (np.amax(np.abs(C), axis=0) / scale)
+        C[np.isnan(C)] == 0
+        C[np.isinf(C)] == 0
         # print(time() - start)
     except RuntimeWarning:
         print("Hej")
@@ -609,7 +611,8 @@ def process_single_file(current_file, fs, seq_len, overlap, encoding="cc"):
             weight *= mask
             weight = np.repeat(weight, 60)
 
-            W = np.stack([weight[j] for j in index], axis=-1)
+            W = np.stack([weight[j] for j in index], axis=0)
+            Z = None
         else:
             W = None
             Z = None
