@@ -3,6 +3,7 @@ from .config_parser import get_args
 from .evaluate_performance import evaluate_performance
 from .evaluate_performance import transition_matrix
 from .get_models import get_model
+from .h5_utils import get_h5_info
 from .h5_utils import load_h5_data
 from .h5_utils import load_psg_h5_data
 from .parallel_bar import ParallelExecutor
