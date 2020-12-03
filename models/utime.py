@@ -7,9 +7,7 @@ import wandb
 #from pytorch_lightning import EvalResult, TrainResult
 from pytorch_lightning import LightningModule
 from pytorch_lightning.metrics import Accuracy
-from torch.utils.data import DataLoader
 
-from datasets import SscWscPsgDataset
 from losses import DiceLoss
 from utils.plotting import plot_segment
 
