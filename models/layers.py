@@ -3,6 +3,63 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class ResidualBlock(nn.Module):
+    # TODO: Fix this
+    def __init__(self, n_filters_in, n_filters_out, kernel_size, strided=False, projection_type="identity"):
+        super().__init__()
+        self.filters_in = n_filters_in
+        self.filters_out = n_filters_out
+        self.kernel_size = kernel_size
+        self.projection_type = projection_type
+        self.padding = kernel_size // 2
+        self.stride = 2 if strided else 1
+
+        self.net = nn.Sequential(
+            nn.Conv1d(
+                in_channels=self.filters_in,
+                out_channels=self.filters_out,
+                kernel_size=self.kernel_size,
+                padding=self.padding,
+                stride=self.stride,  # We stride on the first conv operator
+                bias=False,
+            ),
+            nn.BatchNorm1d(self.filters_out),
+            nn.ReLU(),
+            nn.Conv1d(
+                in_channels=self.filters_out,
+                out_channels=self.filters_out,
+                kernel_size=self.kernel_size,
+                padding=self.padding,
+                bias=False,
+            ),
+            nn.BatchNorm1d(self.filters_out),
+        )
+        if self.projection_type == "identity":
+            self.maxpool = nn.MaxPool1d(self.stride, self.stride)
+        elif self.projection_type == "projection":
+            self.projection = nn.Conv1d(
+                in_channels=self.filters_in,
+                out_channels=self.filters_out,
+                kernel_size=self.stride,
+                stride=self.stride,
+                bias=False,
+            )
+
+    def forward(self, x):
+        z = self.net(x)
+        # print(x.shape)
+        if self.filters_in != self.filters_out:
+            if self.projection_type == "projection":
+                shortcut = self.projection(x)
+            elif self.projection_type == "identity":
+                top = (self.filters_out - self.filters_in) // 2
+                bottom = (self.filters_out - self.filters_in) - top
+                shortcut = F.pad(self.maxpool(x), (0, 0, top, bottom))
+        else:
+            shortcut = x
+        return F.relu(z + shortcut)
+
+
 class SimpleBlock(nn.Module):
     def __init__(self, n_filters_in, n_filters, kernel_size, strided=False):
         super().__init__()
