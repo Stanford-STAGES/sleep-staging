@@ -281,11 +281,14 @@ class StagesModel(ptl.LightningModule):
 
         return logits
 
-    def compute_loss(self, y_hat, y, w):
+    def compute_loss(self, y_hat, y, w=None):
         y = y.mean(dim=-1).permute([0, 2, 1]).reshape(-1, self.hparams.n_classes)
-        w = w.mean(dim=-1).reshape(-1)
-        loss = F.cross_entropy(torch.clamp(y_hat, min=-1e10, max=1e10), y.argmax(dim=1), reduction="none")
-        loss = loss @ w / w.sum()
+        if w is not None:
+            w = w.mean(dim=-1).reshape(-1)
+            loss = F.cross_entropy(torch.clamp(y_hat, min=-1e10, max=1e10), y.argmax(dim=1), reduction="none")
+            loss = loss @ w / w.sum()
+        else:
+            loss = F.cross_entropy(torch.clamp(y_hat, min=-1e10, max=1e10), y.argmax(dim=1))
         if torch.isnan(loss).any():
             print("Bug!")
         return loss
@@ -404,10 +407,10 @@ class StagesModel(ptl.LightningModule):
             p = predicted.cpu().numpy()
             u = t.sum(axis=-1) == 1
 
-            acc = metrics.accuracy_score(t[s & u].argmax(-1), p[s & u].argmax(-1))
-            cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
+            acc = metrics.accuracy_score(t[u].argmax(-1), p[u].argmax(-1))
+            cohen = metrics.cohen_kappa_score(t[u].argmax(-1), p[u].argmax(-1), labels=[0, 1, 2, 3, 4])
             f1_macro = metrics.f1_score(
-                t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average="macro"
+                t[u].argmax(-1), p[u].argmax(-1), labels=[0, 1, 2, 3, 4], average="macro"
             )
 
             self.log_dict(
