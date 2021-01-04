@@ -80,7 +80,7 @@ class MASSCAverage(ptl.LightningModule):
         else:
             self.blocks = nn.ModuleList([
                 nn.Sequential(OrderedDict([
-                    (f'simple_{k}', layers.SimpleBlock(
+                    (f'simpleblock_{k}', layers.SimpleBlock(
                         n_filters_in=self.hparams.n_channels if k == 0 else self.hparams.filter_base * 2 ** (k - 1),
                         n_filters=self.hparams.filter_base * 2 ** k,
                         kernel_size=self.hparams.kernel_size,
@@ -88,6 +88,7 @@ class MASSCAverage(ptl.LightningModule):
                     ))
                 ])) for k in range(self.hparams.n_blocks)
             ])
+            classification_in_channels = self.hparams.filter_base * (2 ** (self.hparams.n_blocks - 1))
 
         # Create temporal processing block
         if self.hparams.n_rnn_units > 0:
@@ -167,12 +168,18 @@ class MASSCAverage(ptl.LightningModule):
         # Get 1 s predictions
         z_1 = self(x)
 
+        # Return predicted logits
+        logits_1 = self.classification(z_1)
+
         # Merge with average
         z = (z_1.unfold(-1, eval_frequency_sec, eval_frequency_sec)
                 .mean(dim=-1))
 
-        # Return predicted logits
-        logits_1 = self.classification(z_1)
+        if self.temporal_block is not None:
+            z = z.permute(0, 2, 1)
+            z = self.temporal_block(z)
+            z = z[0].permute(0, 2, 1)
+
         logits = self.classification(z)
 
         return logits, logits_1
@@ -311,6 +318,7 @@ class MASSCAverage(ptl.LightningModule):
             "sequence_nr": current_sequence,
             "stable_sleep": stable_sleep,
             "logits": y_hat_1.softmax(dim=1),
+            # "data": X.cpu(),
         }
 
     def test_epoch_end(self, output_results):
@@ -325,6 +333,7 @@ class MASSCAverage(ptl.LightningModule):
         stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in output_results], dim=0)
         sequence_nrs = torch.cat([out['sequence_nr'] for out in output_results], dim=0)
         logits = torch.cat([out['logits'] for out in output_results], dim=0).permute([0, 2, 1])
+        # data = torch.cat([out['data'] for out in output_results], dim=0).permute([0, 2, 1])
         # records = [i for i, out in enumerate(output_results) for j, _ in enumerate(out['record'])]
 
         if self.use_ddp:
@@ -369,31 +378,37 @@ class MASSCAverage(ptl.LightningModule):
         else:
             records = [r for out in output_results for r in out['record']]
 
-        results = {r: {
+        results = {
+            r: {
                 "true": [],
                 "true_label": [],
                 "predicted": [],
                 "predicted_label": [],
                 "stable_sleep": [],
                 "logits": [],
-                # 'acc': None,
-                # 'f1': None,
-                # 'recall': None,
-                # 'precision': None,
+                "seq_nr": []
             } for r in all_records
         }
 
         for r in tqdm(all_records, desc='Sorting predictions...'):
             record_idx = [idx for idx, rec in enumerate(records) if r == rec]
-            current_t = torch.cat([t for idx, t in enumerate(true) if idx in record_idx], dim=0)
-            current_p = torch.cat([p for idx, p in enumerate(predicted) if idx in record_idx], dim=0)
-            current_ss = torch.cat([ss.to(torch.bool) for idx, ss in enumerate(stable_sleep) if idx in record_idx], dim=0)
-            current_l = torch.cat([l for idx, l in enumerate(logits) if idx in record_idx], dim=0)
+            current_t = true[record_idx].reshape(-1, true.shape[-1])
+            current_p = predicted[record_idx].reshape(-1, predicted.shape[-1])
+            current_ss = stable_sleep[record_idx].reshape(-1).to(torch.bool)
+            current_l = logits[record_idx].reshape(-1, logits.shape[-1])
+            current_seq = sequence_nrs[record_idx]
+
+            # current_t = torch.cat([t for idx, t in enumerate(true) if idx in record_idx], dim=0)
+            # current_p = torch.cat([p for idx, p in enumerate(predicted) if idx in record_idx], dim=0)
+            # current_ss = torch.cat([ss.to(torch.bool) for idx, ss in enumerate(stable_sleep) if idx in record_idx], dim=0)
+            # current_l = torch.cat([l for idx, l in enumerate(logits) if idx in record_idx], dim=0)
+            # current_seq = torch.stack([s for idx, s in enumerate(sequence_nrs) if idx in record_idx])
 
             results[r]['true'] = current_t.cpu().numpy()
             results[r]['predicted'] = current_p.cpu().numpy()
             results[r]['stable_sleep'] = current_ss.cpu().numpy()
             results[r]['logits'] = current_l.cpu().numpy()
+            results[r]['seq_nr'] = current_seq.cpu().numpy()
 
         return results
 
@@ -424,11 +439,13 @@ class MASSCAverage(ptl.LightningModule):
             self.scheduler_params = {}
             if self.hparams.lr_scheduler == "cycliclr":
                 self.scheduler_params.update(dict(base_lr=self.hparams.base_lr, max_lr=self.hparams.max_lr, step_size_up=self.hparams.step_size_up))
+                if self.hparams.optimizer == "adam":
+                    self.scheduler_params['cycle_momentum'] = False
                 scheduler = {
                     "scheduler": torch.optim.lr_scheduler.CyclicLR(optimizer, **self.scheduler_params),
                     "interval": "step",
                     "frequency": 1,  # self.steps_per_file,
-                    "name": "lr_schedule",
+                    "name": "learning_rate",
                 }
             elif self.hparams.lr_scheduler == "reduce_on_plateau":
                 self.scheduler_params.update(dict(factor=self.hparams.lr_reduce_factor, patience=self.hparams.lr_reduce_patience))
