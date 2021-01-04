@@ -12,8 +12,10 @@ import pandas as pd
 import scipy
 import scipy.io as sio
 import skimage
+
 # import pyfftw
 from h5py import File
+
 # from numba import jit
 
 # from mkl_fft._scipy_fft import fft
@@ -552,7 +554,7 @@ def process_single_file(current_file, fs, seq_len, overlap, encoding="cc"):
 
     if encoding == "cc":
 
-        label = np.tile(hyp, (120, 1))
+        label = np.repeat(hyp, 120, axis=0)
         # label = label.T.flatten()  # Why is this here...?
 
         # Filter signals
@@ -590,6 +592,7 @@ def process_single_file(current_file, fs, seq_len, overlap, encoding="cc"):
         labels = np.zeros((5,) + label.shape).astype(np.uint8)
         for j in range(5):
             labels[j, label == j + 1] = 1
+        # index = rolling_window_nodelay(np.arange(C.shape[1]), seq_len, seq_len - overlap).T
         index = skimage.util.view_as_windows(np.arange(C.shape[1]), seq_len, seq_len - overlap)
         M = np.stack([C[:, j] for j in index], axis=0)
         L = np.stack([labels[:, j] for j in index], axis=0)
