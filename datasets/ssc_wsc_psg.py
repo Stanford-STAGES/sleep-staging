@@ -28,6 +28,17 @@ warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
 SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
 
 
+def get_class_sequence_idx(hypnogram, selected_sequences):
+    d = {
+        "w": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 0).any() and idx in selected_sequences],
+        "n1": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 1).any() and idx in selected_sequences],
+        "n2": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 2).any() and idx in selected_sequences],
+        "n3": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 3).any() and idx in selected_sequences],
+        "r": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 4).any() and idx in selected_sequences],
+    }
+    return d
+
+
 def get_unknown_stage(onehot_hypnogram):
     return onehot_hypnogram.sum(axis=1) == 0
 
@@ -76,6 +87,59 @@ def get_stable_sleep_periods(hypnogram, adjustment=30):
     return stable_periods_bool, stable_periods
 
 
+# def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
+
+#     if scaling in SCALERS.keys():
+#         scaler = SCALERS[scaling]()
+#     else:
+#         scaler = None
+
+#     with File(filename, "r") as h5:
+#         # if "A2081_5 194244.h5" in filename:
+#         #     print("Hej")
+#         N, C, T = h5["M"].shape
+#         hyp_shape = h5["L"].shape
+#         sequences_in_file = N
+
+#         if scaler:
+#             scaler.fit(h5["M"][:].transpose(1, 0, 2).reshape((C, N * T)).T)
+
+#         # Remember that the output array from the H5 has 50 % overlap between segments.
+#         # Use the following to split into even and odd
+#         if overlap:
+#             hyp_even = h5["L"][0::2]
+#             hyp_odd = h5["L"][1::2]
+#             if adjustment > 0:
+#                 stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], False)
+#                 stable_sleep[0::2] = get_stable_sleep_periods(hyp_even.argmax(axis=1), adjustment)[0]
+#                 stable_sleep[1::2] = get_stable_sleep_periods(hyp_odd.argmax(axis=1), adjustment)[0]
+#             else:
+#                 stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], True)
+#         else:
+#             if adjustment > 0:
+#                 stable_sleep = get_stable_sleep_periods(h5["L"][:].argmax(axis=1), adjustment)[0]
+#             else:
+#                 stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], True)
+
+#         # Remove unknown stage
+#         unknown_stage = get_unknown_stage(h5["L"][:])
+#         stable_sleep[unknown_stage] = False
+
+#         # Get bin counts
+#         # if "train" in filename:
+#         if overlap:
+#             # hyp = h5["L"][::2].argmax(axis=1)[~get_unknown_stage(h5["L"][::2])][::30]
+#             hyp = h5["L"][::2].argmax(axis=1)[~unknown_stage[::2] & stable_sleep[::2]][::30]
+#         else:
+#             # hyp = h5["L"][:].argmax(axis=1)[~get_unknown_stage(h5["L"][:])][::30]
+#             hyp = h5["L"][:].argmax(axis=1)[~unknown_stage & stable_sleep][::30]
+#         bin_counts = np.bincount(hyp, minlength=C)
+#         # else:
+#         #     bin_counts =
+
+#     return sequences_in_file, scaler, stable_sleep, bin_counts
+
+
 def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
 
     if scaling in SCALERS.keys():
@@ -85,9 +149,10 @@ def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
 
     with File(filename, "r") as h5:
         # if "A2081_5 194244.h5" in filename:
-        #     print("Hej")
+        # print("Hej")
         N, C, T = h5["M"].shape
-        hyp_shape = h5["L"].shape
+        hypnogram = h5["L"][:, :, ::30]
+        hyp_shape = hypnogram.shape
         sequences_in_file = N
 
         if scaler:
@@ -96,8 +161,8 @@ def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
         # Remember that the output array from the H5 has 50 % overlap between segments.
         # Use the following to split into even and odd
         if overlap:
-            hyp_even = h5["L"][0::2]
-            hyp_odd = h5["L"][1::2]
+            hyp_even = hypnogram[0::2]
+            hyp_odd = hypnogram[1::2]
             if adjustment > 0:
                 stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], False)
                 stable_sleep[0::2] = get_stable_sleep_periods(hyp_even.argmax(axis=1), adjustment)[0]
@@ -111,22 +176,23 @@ def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
                 stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], True)
 
         # Remove unknown stage
-        unknown_stage = get_unknown_stage(h5["L"][:])
+        unknown_stage = get_unknown_stage(hypnogram)
         stable_sleep[unknown_stage] = False
 
         # Get bin counts
-        # if "train" in filename:
         if overlap:
             # hyp = h5["L"][::2].argmax(axis=1)[~get_unknown_stage(h5["L"][::2])][::30]
-            hyp = h5["L"][::2].argmax(axis=1)[~unknown_stage[::2] & stable_sleep[::2]][::30]
+            hyp = hyp_even.argmax(axis=1)[~unknown_stage[::2] & stable_sleep[::2]]
         else:
             # hyp = h5["L"][:].argmax(axis=1)[~get_unknown_stage(h5["L"][:])][::30]
-            hyp = h5["L"][:].argmax(axis=1)[~unknown_stage & stable_sleep][::30]
+            hyp = hypnogram.argmax(axis=1)[~unknown_stage & stable_sleep]
         bin_counts = np.bincount(hyp, minlength=C)
-        # else:
-        #     bin_counts =
 
-    return sequences_in_file, scaler, stable_sleep, bin_counts
+    hypnogram = hypnogram.argmax(1)
+    # select_sequences = np.where(stable_sleep.squeeze().any(axis=1))[0]
+    # class_indices = get_class_sequence_idx(hypnogram, select_sequences)
+
+    return hypnogram, sequences_in_file, scaler, stable_sleep, bin_counts
 
 
 def load_psg_h5_data(filename, scaling=None):
@@ -164,6 +230,7 @@ class SscWscPsgDataset(Dataset):
         cv=None,
         cv_idx=None,
         eval_ratio=None,
+        balanced_sampling=False,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -176,14 +243,16 @@ class SscWscPsgDataset(Dataset):
         self.cv = cv
         self.cv_idx = cv_idx
         self.eval_ratio = eval_ratio
-
+        self.balanced_sampling = balanced_sampling
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
         # self.data = {r: [] for r in self.records}
         self.index_to_record = []
+        self.index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
         # self.record_to_index = []
         self.record_indices = {r: None for r in self.records}
         self.scalers = {r: None for r in self.records}
         self.stable_sleep = {r: None for r in self.records}
+        self.record_class_indices = {r: None for r in self.records}
         # self.batch_indices = []
         # self.current_record_idx = -1
         # self.current_record = None
@@ -210,16 +279,32 @@ class SscWscPsgDataset(Dataset):
         #     self.data[record] = {'data': d[0], 'target': d[1]}
         self.n_classes = 5
         cum_class_counts = np.zeros(self.n_classes, dtype=np.int64)
-        for record, (sequences_in_file, scaler, stable_sleep, class_counts) in zip(
+        for record, (hypnogram, sequences_in_file, scaler, stable_sleep, class_counts) in zip(
             tqdm(self.records, desc="Processing"), data
         ):
             # Some sequences are all unstable sleep, which interferes with the loss calculations.
             # This selects sequences where at least one epoch is sleep.
             select_sequences = np.where(stable_sleep.squeeze().any(axis=1))[0]
             self.record_indices[record] = select_sequences  # np.arange(sequences_in_file)
+            self.record_class_indices[record] = get_class_sequence_idx(hypnogram, select_sequences)
             self.index_to_record.extend(
                 [{"record": record, "idx": x} for x in select_sequences]
             )  # range(sequences_in_file)])
+            # for c in self.index_to_record_class.keys():
+            #     self.index_to_record_class[c].extend(
+            #         [
+            #             {
+            #                 "idx": [
+            #                     idx
+            #                     for idx, i2r in enumerate(self.index_to_record)
+            #                     if i2r["idx"] == x and record == i2r["record"]
+            #                 ][0],
+            #                 "record": record,
+            #                 "record_idx": x,
+            #             }
+            #             for x in self.record_class_indices[record][c]
+            #         ]
+            #     )
             self.scalers[record] = scaler
             self.stable_sleep[record] = stable_sleep
             cum_class_counts += class_counts
@@ -273,7 +358,7 @@ class SscWscPsgDataset(Dataset):
             print(f"Train record indices: {train_idx}")
             print(f"Number of train/eval records: {len(train_idx)}/{len(eval_idx)}")
             print("\n")
-        train_data = SscWscPsgSubset(self, train_idx, name="Train")
+        train_data = SscWscPsgSubset(self, train_idx, balanced_sampling=self.balanced_sampling, name="Train")
         eval_data = SscWscPsgSubset(self, eval_idx, name="Validation")
 
         return train_data, eval_data
@@ -341,24 +426,47 @@ def collate_fn(batch):
 
 
 class SscWscPsgSubset(Dataset):
-    def __init__(self, dataset, record_indices, name="Train"):
+    def __init__(self, dataset, record_indices, name="Train", balanced_sampling=False):
         self.dataset = dataset
         self.record_indices = record_indices
         self.name = name
+        self.balanced_sampling = balanced_sampling
         self.records = [self.dataset.records[idx] for idx in self.record_indices]
-        self.sequence_indices = (
-            self.__get_subset_indices()
-        )  # [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
+        if self.balanced_sampling:
+            self.sequence_indices = self._get_subset_class_indices()
+        else:
+            self.sequence_indices = (
+                self.__get_subset_indices()
+            )  # [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
+
+    def _get_subset_class_indices(self):
+        out = {k: None for k in self.dataset.index_to_record_class.keys()}
+        for c in out.keys():
+            t = list(map(lambda x: x["record"] in self.records, self.dataset.index_to_record_class[c]))
+            out[c] = list(compress(range(len(t)), t))
+        return out
 
     def __get_subset_indices(self):
         t = list(map(lambda x: x["record"] in self.records, self.dataset.index_to_record))
         return list(compress(range(len(t)), t))
 
     def __getitem__(self, idx):
-        return self.dataset[self.sequence_indices[idx]]
+        if isinstance(self.sequence_indices, dict):
+            class_choice = np.random.choice(list(self.sequence_indices.keys()))
+            sequence_choice = np.random.choice(self.sequence_indices[class_choice])
+            return self.dataset[self.dataset.index_to_record_class[class_choice][sequence_choice]["idx"]]
+        else:
+            return self.dataset[self.sequence_indices[idx]]
+
+    # def __getitem__(self, idx):
+    #     return self.dataset[self.sequence_indices[idx]]
 
     def __len__(self):
-        return len(self.sequence_indices)
+        if isinstance(self.sequence_indices, dict):
+            return sum([len(v) for v in self.sequence_indices.values()])
+        else:
+            return len(self.sequence_indices)
+        # return len(self.sequence_indices)
 
     def __str__(self):
         s = f"""
@@ -387,11 +495,13 @@ class SscWscDataModule(pl.LightningDataModule):
         n_records=None,
         scaling="robust",
         adjustment=None,
+        balanced_sampling=False,
         **kwargs,
     ):
         super().__init__()
         self.adjustment = adjustment
         self.data_dir = data_dir
+        self.balanced_sampling = balanced_sampling
         self.batch_size = batch_size
         self.cv = cv
         self.cv_idx = cv_idx
@@ -414,9 +524,12 @@ class SscWscDataModule(pl.LightningDataModule):
 
     def setup(self, stage="fit"):
         if stage == "fit":
-            dataset = SscWscPsgDataset(data_dir=self.data["train"], **self.dataset_params)
+            dataset = SscWscPsgDataset(
+                data_dir=self.data["train"], balanced_sampling=self.balanced_sampling, **self.dataset_params
+            )
             self.train, self.eval = dataset.split_data()
         elif stage == "test":
+            # self.dataset_params["overlap"] = 0
             self.test = SscWscPsgDataset(data_dir=self.data["test"], overlap=False, **self.dataset_params)
 
     def train_dataloader(self):
@@ -462,6 +575,7 @@ class SscWscDataModule(pl.LightningDataModule):
         dataset_group.add_argument("--adjustment", default=0, type=int)
         dataset_group.add_argument("--cv", default=None, type=int)
         dataset_group.add_argument("--cv_idx", default=None, type=int)
+        dataset_group.add_argument("--balanced_sampling", default=False, action="store_true")
 
         # DATALOADER specific
         dataloader_group = parser.add_argument_group("dataloader")
