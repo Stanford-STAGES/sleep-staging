@@ -102,6 +102,7 @@ def get_args():
 
     # Get the best model from the directory by default
     if args.resume_from_checkpoint and os.path.isdir(args.resume_from_checkpoint):
-        args.resume_from_checkpoint = glob(os.path.join(args.resume_from_checkpoint, "epoch*.ckpt"))[0]
+        args.resume_from_checkpoint = temp_args.resume_from_checkpoint
+        # args.resume_from_checkpoint = glob(os.path.join(args.resume_from_checkpoint, "epoch*.ckpt"))[0]
 
     return args
