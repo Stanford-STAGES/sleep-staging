@@ -41,15 +41,15 @@ class STAGESDataset(torch.utils.data.Dataset):
 
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
         self.data = {r: [] for r in self.records}
-        self.index_to_record = []
-        self.record_to_index = []
+        # self.index_to_record = []
+        # self.record_to_index = []
         self.record_indices = {r: None for r in self.records}
         self.batch_indices = []
-        self.current_record_idx = -1
-        self.current_record = None
-        self.loaded_record = None
-        self.current_position = None
-        print(self.record_to_index)
+        # self.current_record_idx = -1
+        # self.current_record = None
+        # self.loaded_record = None
+        # self.current_position = None
+        # print(self.record_to_index)
         # data = load_h5_data(os.path.join(self.data_dir, self.records[0]))
         self.cache_dir = "data/.cache"
         memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
@@ -65,30 +65,31 @@ class STAGESDataset(torch.utils.data.Dataset):
             delayed(get_data)(filename=os.path.join(self.data_dir, record)) for record in self.records
         )
         # print('Processing...')
-        self.index_matrix = []
-        for record, d in zip(tqdm(self.records, desc="Processing"), data):
+        # self.index_matrix = []
+        for d, record in tqdm(data, desc="Processing"):
+            # for record, d in zip(tqdm(self.records, desc="Processing"), data):
             # seqs_in_file = d[3]
             # self.data[record] = {"data": d[0], "target": d[1], "weights": d[2]}
             seqs_in_file = d
             self.record_indices[record] = np.arange(seqs_in_file)
-            self.index_to_record.extend([{"record": record, "idx": x} for x in range(seqs_in_file)])
-            self.batch_indices.extend(
-                [
-                    {"record": record, "range": np.arange(v, v + self.batch_size)}
-                    for v in range(0, seqs_in_file, self.batch_size)
-                ]
-            )
-            self.record_to_index.append({"record": record, "range": np.arange(seqs_in_file)})
+            # self.index_to_record.extend([{"record": record, "idx": x} for x in range(seqs_in_file)])
+            # self.batch_indices.extend(
+            #     [
+            #         {"record": record, "range": np.arange(v, v + self.batch_size)}
+            #         for v in range(0, seqs_in_file, self.batch_size)
+            #     ]
+            # )
+            # self.record_to_index.append({"record": record, "range": np.arange(seqs_in_file)})
             # Define a matrix of indices
-            self.index_matrix.extend([np.arange(seqs_in_file)])
+            # self.index_matrix.extend([np.arange(seqs_in_file)])
             # print(record)
-        self.index_matrix = np.stack(self.index_matrix)
+        # self.index_matrix = np.stack(self.index_matrix)
         print("Finished loading data")
 
         # # Define a matrix of indices
         # self.index_matrix = np.stack(
         #     [np.arange(0, 300) for _ in range(len(self.records))])
-        print(self.index_matrix.shape)
+        # print(self.index_matrix.shape)
         # self.shuffle_records()
         self.shuffle_data()
         self.batch_data()
@@ -120,15 +121,15 @@ class STAGESDataset(torch.utils.data.Dataset):
             ]
         )
 
-    def initialize(self):
-        self.current_record_idx = -1
-        self.set_next()
+    # def initialize(self):
+    #     self.current_record_idx = -1
+    #     self.set_next()
 
-    def set_next(self):
-        self.current_record_idx += 1
-        self.current_record = self.records[self.current_record_idx]
-        self.current_position = 0
-        # self.get_record()
+    # def set_next(self):
+    #     self.current_record_idx += 1
+    #     self.current_record = self.records[self.current_record_idx]
+    #     self.current_position = 0
+    # self.get_record()
 
     def split_data(self):
         n_records = len(self.records)
@@ -140,23 +141,23 @@ class STAGESDataset(torch.utils.data.Dataset):
         eval_data = STAGESSubset(self, np.arange(0, n_eval), name="Eval")
         return train_data, eval_data
 
-    def get_record(self):
-        # if not self.loaded_record:
-        self.loaded_record = {
-            "data": self.data[self.current_record]["data"],
-            "target": self.data[self.current_record]["target"],
-            "weights": self.data[self.current_record]["weights"],
-            "record": self.current_record,
-            "current_pos": 0,
-        }
-        # }
-        # elif self.loaded_record['record'] != self.current_record:
-        # self.
-        # self.loaded_record = {k: v for k, v in zip(['data', 'target', 'weights'], load_h5_data(
-        #     os.path.join(self.data_dir, self.current_record), seg_size=self.seg_size))}
-        # self.loaded_record.update(
-        #     {'record': self.current_record, 'current_pos': 0})
-        # print('debug')
+    # def get_record(self):
+    #     # if not self.loaded_record:
+    #     self.loaded_record = {
+    #         "data": self.data[self.current_record]["data"],
+    #         "target": self.data[self.current_record]["target"],
+    #         "weights": self.data[self.current_record]["weights"],
+    #         "record": self.current_record,
+    #         "current_pos": 0,
+    #     }
+    # }
+    # elif self.loaded_record['record'] != self.current_record:
+    # self.
+    # self.loaded_record = {k: v for k, v in zip(['data', 'target', 'weights'], load_h5_data(
+    #     os.path.join(self.data_dir, self.current_record), seg_size=self.seg_size))}
+    # self.loaded_record.update(
+    #     {'record': self.current_record, 'current_pos': 0})
+    # print('debug')
 
     def __len__(self):
         # return 66
@@ -179,11 +180,35 @@ class STAGESDataset(torch.utils.data.Dataset):
             current_record = self.batch_indices[idx]["record"]
             samples = self.batch_indices[idx]["range"]
 
+            # from time import time
+
             # Grab data
+            # start = time()
             with File(os.path.join(self.data_dir, current_record), "r") as f:
+                # x = f['trainD'][samples].shape
                 x = np.stack([f["trainD"][s] for s in samples]).astype("float32")
                 t = np.stack([f["trainL"][s] for s in samples]).astype("float32").squeeze()
                 w = np.stack([f["trainW"][s] for s in samples]).astype("float32")
+            # print("Elapsed time: ", time() - start)
+
+            # mask = [x for x in range(300) if x in samples]
+            # start = time()
+            # with File(os.path.join(self.data_dir, current_record), "r") as f:
+            #     # x = f['trainD'][samples].shape
+            #     x_ = f["trainD"][mask].astype("float32")
+            #     t_ = f["trainL"][mask].astype("float32").squeeze()
+            #     w_ = f["trainW"][mask].astype("float32")
+            # print("Elapsed time: ", time() - start)
+
+            # samples = sorted(samples)
+            # start = time()
+            # with File(os.path.join(self.data_dir, current_record), "r") as f:
+            #     # x = f['trainD'][samples].shape
+            #     x__ = f["trainD"][samples].astype("float32")
+            #     t__ = f["trainL"][samples].astype("float32").squeeze()
+            #     w__ = f["trainW"][samples].astype("float32")
+            # print("Elapsed time: ", time() - start)
+
             # current_record = self.current_record
             # current_pos = self.current_position
             # samples = self.record_indices[current_record][current_pos:current_pos+self.batch_size]
