@@ -69,10 +69,10 @@ def evaluate_performance(record_predictions, evaluation_windows=[1, 3, 5, 10, 15
                 # Extract the metrics
                 acc = accuracy_score(t, p)
                 bal_acc = balanced_accuracy_score(t, p)
-                kappa = cohen_kappa_score(t, p)
-                f1 = f1_score(t, p, average="macro")
-                prec = precision_score(t, p, average="macro")
-                recall = recall_score(t, p, average="macro")
+                kappa = cohen_kappa_score(t, p, labels=[0, 1, 2, 3, 4])
+                f1 = f1_score(t, p, average="macro", labels=[0, 1, 2, 3, 4])
+                prec = precision_score(t, p, average="macro", labels=[0, 1, 2, 3, 4])
+                recall = recall_score(t, p, average="macro", labels=[0, 1, 2, 3, 4])
                 mcc = matthews_corrcoef(t, p)
 
                 # Assign metrics to dataframe
