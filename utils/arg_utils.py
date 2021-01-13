@@ -1,5 +1,6 @@
 import argparse
 import os
+import pprint
 from datetime import datetime
 from glob import glob
 
@@ -10,13 +11,17 @@ import datasets
 import models
 
 
-def get_args():
+def get_args(print_args=False):
 
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--name", default=None, type=str)
+    parser.add_argument("--checkpoint_monitor", default="eval_loss", type=str)
+    parser.add_argument("--dataset_type", type=str, default="stages")
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--earlystopping_monitor", default="eval_loss", type=str)
     parser.add_argument("--earlystopping_patience", default=100, type=int)
+    parser.add_argument("--name", default=None, type=str)
     parser.add_argument("--lr_finder", action="store_true")
+    parser.add_argument("--seed", default=1337, type=int)
 
     # add args from trainer
     parser = pl.Trainer.add_argparse_args(parser)
@@ -33,11 +38,11 @@ def get_args():
         temp_args.model_type = hparams["model_type"]
 
     # add args from dataset
-
-    if temp_args.model_type == "stages":
-        parser = datasets.available_datamodules[temp_args.model_type].add_dataset_specific_args(parser)
-    else:
-        parser = datasets.available_datamodules["ssc-wsc"].add_dataset_specific_args(parser)
+    parser = datasets.available_datamodules[temp_args.model_type].add_dataset_specific_args(parser)
+    # if temp_args.model_type == "stages":
+    #     parser = datasets.available_datamodules[temp_args.model_type].add_dataset_specific_args(parser)
+    # else:
+    #     parser = datasets.available_datamodules["ssc-wsc"].add_dataset_specific_args(parser)
     #     parser = datasets.STAGESDataModule.add_dataset_specific_args(parser)
     # else:
     #     parser = datasets.SscWscDataModule.add_dataset_specific_args(parser)
@@ -57,6 +62,8 @@ def get_args():
     #     parser = models.AvgLossMasscModel.add_model_specific_args(parser)
     # elif temp_args.model_type == "utime":
     #     parser = models.UTimeModel.add_model_specific_args(parser)
+
+    # Add args from model
     parser = models.available_models[temp_args.model_type].add_model_specific_args(parser)
 
     # parse params
@@ -82,17 +89,9 @@ def get_args():
             args.save_dir = os.path.join("experiments", "utime", datetime.now().strftime("%Y%m%d_%H%M%S"))
         elif args.model_type == "stages":
             if args.name is None:
-                args.save_dir = os.path.join(
-                    "experiments", args.model_type, args.model_name, datetime.now().strftime("%Y%m%d_%H%M%S")
-                )
+                args.save_dir = os.path.join("experiments", args.model_type, args.model_name,)
             else:
-                args.save_dir = os.path.join(
-                    "experiments",
-                    args.model_type,
-                    args.model_name,
-                    args.name,
-                    datetime.now().strftime("%Y%m%d_%H%M%S"),
-                )
+                args.save_dir = os.path.join("experiments", args.model_type, args.model_name, args.name,)
     # os.makedirs(args.save_dir, exist_ok=True)
     # args.save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -104,5 +103,14 @@ def get_args():
     if args.resume_from_checkpoint and os.path.isdir(args.resume_from_checkpoint):
         args.resume_from_checkpoint = temp_args.resume_from_checkpoint
         # args.resume_from_checkpoint = glob(os.path.join(args.resume_from_checkpoint, "epoch*.ckpt"))[0]
+
+    # Set the seed
+    if args.model_type == "stages":
+        args.seed = 42 + int(args.model_name.split("_")[-1])
+    else:
+        args.seed = 1337
+
+    if print_args:
+        pprint.pprint(vars(args))
 
     return args
