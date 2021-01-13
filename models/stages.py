@@ -8,6 +8,7 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as ptl
+import sklearn.metrics as metrics
 
 # from pytorch_lightning.metrics import Accuracy
 # from pytorch_lightning.metrics import F1
@@ -182,9 +183,21 @@ class StagesModel(ptl.LightningModule):
 
     # def __init__(self, batch_size=5, data_dir=None, dropout=None, eval_ratio=0.1, learning_rate=0.005, model_name=None,
     #              momentum=0.9, n_classes=None, n_hidden_units=None, n_jobs=None, n_workers=None, seg_size=None, **kwargs):
-    def __init__(self, hparams, *args, **kwargs):
+    def __init__(
+        self,
+        # hparams,
+        batch_size=None,
+        dropout=None,
+        model_name=None,
+        n_classes=None,
+        n_hidden_units=None,
+        seg_size=None,
+        *args,
+        **kwargs,
+    ):
         super().__init__()
-        self.save_hyperparameters({k: v for k, v in hparams.items() if not callable(v)})
+        # self.save_hyperparameters({k: v for k, v in hparams.items() if not callable(v)})
+        self.save_hyperparameters()
         self.example_input_array = torch.zeros(
             self.hparams.batch_size, 400 + 1200 + 40, int(1200 / self.hparams.seg_size), self.hparams.seg_size
         )
@@ -276,13 +289,14 @@ class StagesModel(ptl.LightningModule):
             raise NotImplementedError
 
         # Output layer
-        z = z.reshape([-1, self.hparams.n_hidden_units])
+        # z = z.reshape([-1, self.hparams.n_hidden_units])
         logits = self.output_layer(z)
 
         return logits
 
     def compute_loss(self, y_hat, y, w=None):
         y = y.mean(dim=-1).permute([0, 2, 1]).reshape(-1, self.hparams.n_classes)
+        y_hat = y_hat.reshape(-1, self.hparams.n_classes)
         if w is not None:
             w = w.mean(dim=-1).reshape(-1)
             loss = F.cross_entropy(torch.clamp(y_hat, min=-1e10, max=1e10), y.argmax(dim=1), reduction="none")
@@ -315,7 +329,7 @@ class StagesModel(ptl.LightningModule):
 
     def training_step(self, batch, batch_index):
 
-        X, y, w = batch
+        X, y, w, _, _ = batch
         batch_size, n_features, seg_len = X.shape
         X = X.unfold(-1, self.hparams.seg_size, self.hparams.seg_size)
         y = y.unfold(-1, self.hparams.seg_size, self.hparams.seg_size)
@@ -334,6 +348,7 @@ class StagesModel(ptl.LightningModule):
         # logs = {'train_loss': loss, 'train_acc': acc, 'train_baseline': baseline}
 
         # return {"loss": loss, "log": {**dict(train_loss=loss), **metrics}}
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_index):
@@ -346,8 +361,8 @@ class StagesModel(ptl.LightningModule):
         self.log("eval_loss", loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
         return {
-            "predicted": y_hat.softmax(dim=1),
-            "true": y,
+            "predicted": y_hat.softmax(dim=-1),
+            "true": y.mean(dim=-1).permute([0, 2, 1]),
             "record": current_record,
             "sequence_nr": current_sequences,
         }
@@ -360,11 +375,11 @@ class StagesModel(ptl.LightningModule):
         # return {**dict(eval_loss=loss), **metrics}
         # return {'eval_loss': loss}.update({'_'.join(['eval', k]): v for k, v in metrics.items()})
         # return {'val_loss': loss, 'val_acc': acc, 'val_baseline': baseline}
-        return {"predicted": y_hat.softmax(dim=1), "true": y}
+        # return {"predicted": y_hat.softmax(dim=1), "true": y}
 
     def validation_epoch_end(self, outputs):
 
-        true = torch.cat([out["true"] for out in outputs], dim=0).permute([0, 2, 3, 1])
+        true = torch.cat([out["true"] for out in outputs], dim=0)
         predicted = torch.cat([out["predicted"] for out in outputs], dim=0)
         sequence_nrs = torch.cat([out["sequence_nr"] for out in outputs], dim=0)
 
@@ -377,30 +392,16 @@ class StagesModel(ptl.LightningModule):
             dist.all_gather(out_predicted, predicted)
             dist.all_gather(out_seq_nrs, sequence_nrs)
             if dist.get_rank() == 0:
-                t = (
-                    torch.stack(out_true)
-                    .transpose(0, 1)
-                    .reshape(-1, int(300 / self.hparams.eval_frequency_sec), self.hparams.n_classes)
-                    .cpu()
-                    .numpy()
-                )
-                p = (
-                    torch.stack(out_predicted)
-                    .transpose(0, 1)
-                    .reshape(-1, int(300 / self.hparams.eval_frequency_sec), self.hparams.n_classes)
-                    .cpu()
-                    .numpy()
-                )
+                t = torch.cat(out_true).cpu().numpy()
+                p = torch.cat(out_predicted).cpu().numpy()
                 u = t.sum(axis=-1) == 1
 
-                acc = metrics.accuracy_score(t[s & u].argmax(-1), p[s & u].argmax(-1))
-                cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
-                f1_macro = metrics.f1_score(
-                    t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average="macro"
-                )
+                acc = metrics.accuracy_score(t[u].argmax(-1), p[u].argmax(-1))
+                cohen = metrics.cohen_kappa_score(t[u].argmax(-1), p[u].argmax(-1), labels=[0, 1, 2, 3, 4])
+                f1_macro = metrics.f1_score(t[u].argmax(-1), p[u].argmax(-1), labels=[0, 1, 2, 3, 4], average="macro")
 
                 self.log_dict(
-                    {"eval_acc": acc, "eval_cohen": cohen, "eval_f1_macro": f1_macro,}, prog_bar=True, on_epoch=True
+                    {"eval_acc": acc, "eval_cohen": cohen, "eval_f1_macro": f1_macro}, prog_bar=True, on_epoch=True
                 )
         elif self.on_gpu:
             t = true.cpu().numpy()
@@ -409,9 +410,7 @@ class StagesModel(ptl.LightningModule):
 
             acc = metrics.accuracy_score(t[u].argmax(-1), p[u].argmax(-1))
             cohen = metrics.cohen_kappa_score(t[u].argmax(-1), p[u].argmax(-1), labels=[0, 1, 2, 3, 4])
-            f1_macro = metrics.f1_score(
-                t[u].argmax(-1), p[u].argmax(-1), labels=[0, 1, 2, 3, 4], average="macro"
-            )
+            f1_macro = metrics.f1_score(t[u].argmax(-1), p[u].argmax(-1), labels=[0, 1, 2, 3, 4], average="macro")
 
             self.log_dict(
                 {"eval_acc": acc, "eval_cohen": cohen, "eval_f1_macro": f1_macro}, prog_bar=True, on_epoch=True
@@ -421,11 +420,9 @@ class StagesModel(ptl.LightningModule):
             p = predicted.numpy()
             u = t.sum(axis=-1) == 1
 
-            acc = metrics.accuracy_score(t[u].argmax(-1), p[s & u].argmax(-1))
-            cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
-            f1_macro = metrics.f1_score(
-                t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average="macro"
-            )
+            acc = metrics.accuracy_score(t[u].argmax(-1), p[u].argmax(-1))
+            cohen = metrics.cohen_kappa_score(t[u].argmax(-1), p[u].argmax(-1), labels=[0, 1, 2, 3, 4])
+            f1_macro = metrics.f1_score(t[u].argmax(-1), p[u].argmax(-1), labels=[0, 1, 2, 3, 4], average="macro")
 
             self.log_dict(
                 {"eval_acc": acc, "eval_cohen": cohen, "eval_f1_macro": f1_macro}, prog_bar=True, on_epoch=True
