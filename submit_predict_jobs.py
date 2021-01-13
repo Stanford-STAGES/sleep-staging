@@ -44,7 +44,7 @@ JOBS = [
     # ('pkw25', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw25/20201121_061018'),
     # ('pkw27', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw27/20201121_072454'),
     # ('pkw29', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw29/20201121_072425'),
-    ('pkw31', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw31/20201124_065129'),
+    # ('pkw31', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw31/20201124_065129'),
     # ('pkw33', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw33/20201123_030125'),
     # ('pkw35', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw35/20201121_061018'),
     # ('pkw37', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw37/20201123_030125'),
@@ -52,6 +52,7 @@ JOBS = [
     # ('pkw41', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw41/20201123_092604'),
     # ('patt15', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/att15/20201124_080608'),
     # ('patt30', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/att30/20201124_080609'),
+    ('pavg_kw21_rnn128', 'python predict.py --gpus 1 --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21_rnn128/20201209_025443/epoch=038-eval_loss=0.37.ckpt'),
 ]
 # fmt: on
 
@@ -64,7 +65,7 @@ def submit_job(jobname, experiment):
 #SBATCH -p mignot,owners,gpu
 #SBATCH --time=2-00:00
 #SBATCH --cpus-per-task=10
-#SBATCH --gres gpu:2
+#SBATCH --gres gpu:1
 #SBATCH --output=/home/users/alexno/sleep-staging/logs/{0}.out
 #SBATCH --error=/home/users/alexno/sleep-staging/logs/{0}.err
 ##################################################

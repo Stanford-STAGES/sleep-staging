@@ -97,10 +97,13 @@ JOBS = [
     # ('kw41', 'python train.py --kernel_size 35 --model_type massc --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 50 --n_rnn_units 0 --lr_reduce_patience 10'),
     # ('att15', 'python train.py --model_type massc_attention --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 50 --lr_reduce_patience 10 --eval_frequency_sec 15'),
     # ('att30', 'python train.py --model_type massc_attention --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 50 --lr_reduce_patience 10 --eval_frequency_sec 30'),
-    ('avg_kw3_residual', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 3 --block_type residual --filter_base 8'),
-    ('avg_kw21_residual', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --block_type residual --filter_base 8'),
-    ('avg_kw3_bottleneck', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 3 --block_type bottleneck'),
-    ('avg_kw21_bottleneck', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --block_type bottleneck'),
+    # ('avg_kw3_residual', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 3 --block_type residual --filter_base 8'),
+    # ('avg_kw21_residual', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --block_type residual --filter_base 8'),
+    # ('avg_kw3_bottleneck', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 3 --block_type bottleneck'),
+    # ('avg_kw21_bottleneck', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --block_type bottleneck'),
+    # ('avg_kw21_rnn128', 'python train.py --model_type massc_average --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --n_rnn_units 128 --n_rnn_layers 1 --rnn_bidirectional'),
+    ('avg_kw3_rnn128', 'python train.py --model_type massc_average --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 3 --n_rnn_units 128 --n_rnn_layers 1 --rnn_bidirectional'),
+    ('avg_kw21_rnn128_cyclic', 'python train.py --model_type massc_average --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --kernel_size 21 --n_rnn_units 128 --n_rnn_layers 1 --rnn_bidirectional --lr_scheduler cycliclr --max_lr 2e-2 --step_size_up 16000 --base_lr 1e-4'),
 ]
 # fmt: on
 
@@ -112,8 +115,8 @@ def submit_job(jobname, experiment):
 #SBATCH --job-name={0}
 #SBATCH -p mignot,owners,gpu
 #SBATCH --time=2-00:00
-#SBATCH --cpus-per-task=10
-#SBATCH --gpus 2
+#SBATCH --cpus-per-task=20
+#SBATCH --gpus 4
 #SBATCH --output=/home/users/alexno/sleep-staging/logs/{0}.out
 #SBATCH --error=/home/users/alexno/sleep-staging/logs/{0}.err
 ##################################################
