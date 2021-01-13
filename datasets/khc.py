@@ -1,3 +1,4 @@
+import argparse
 import math
 import os
 import random
@@ -6,6 +7,7 @@ from itertools import compress
 import numpy as np
 import pandas as pd
 import torch
+import pytorch_lightning as pl
 from h5py import File
 from joblib import delayed
 from joblib import Memory
@@ -119,10 +121,20 @@ def load_psg_h5_data(filename):
     # return X, y, sequences_in_file
 
 
-class KoreanDataset(Dataset):
+class KHCDataset(Dataset):
     """Korean Hypersomnia Cohort"""
 
-    def __init__(self, data_dir=None, encoding="raw", n_jobs=-1, n_records=-1, subset="test", overlap=True, adjustment=30, scaling=None):
+    def __init__(
+        self,
+        data_dir=None,
+        encoding="raw",
+        n_jobs=-1,
+        n_records=-1,
+        subset="test",
+        overlap=True,
+        adjustment=30,
+        scaling=None,
+    ):
         super().__init__()
         self.data_dir = data_dir
         self.encoding = encoding
@@ -142,9 +154,10 @@ class KoreanDataset(Dataset):
         self.scalers = {r: None for r in self.records}
         self.stable_sleep = {r: None for r in self.records}
         self.cache_dir = "data/.cache"
-        memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
+        # memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
         # get_data = memory.cache(load_psg_h5_data)
-        get_data = memory.cache(initialize_record)
+        # get_data = memory.cache(initialize_record)
+        get_data = initialize_record
 
         # Get information about the data
         # print(f"Loading mmap data using {n_jobs} workers:")
@@ -160,7 +173,10 @@ class KoreanDataset(Dataset):
         print(f"Loading mmap data using {n_jobs} workers:")
         data = ParallelExecutor(n_jobs=n_jobs, prefer="threads")(total=len(self.records))(
             delayed(get_data)(
-                filename=os.path.join(self.data_dir, record), scaling=self.scaling, adjustment=self.adjustment, overlap=self.overlap
+                filename=os.path.join(self.data_dir, record),
+                scaling=self.scaling,
+                adjustment=self.adjustment,
+                overlap=self.overlap,
             )
             for record in self.records
         )
@@ -201,7 +217,7 @@ class KoreanDataset(Dataset):
             # Grab data
             with File(os.path.join(self.data_dir, current_record), "r") as f:
                 x = f["M"][current_sequence].astype("float32")
-                t = f["L"][current_sequence].astype("uint8")
+                t = f["L"][current_sequence].astype("uint8").squeeze()
             # x = self.data[current_record]['data'][current_sequence]
             # t = self.data[current_record]['target'][current_sequence]
 
@@ -228,57 +244,65 @@ Number of records: {len(self.records)}
         return s
 
 
-# def collate_fn(batch):
-#
-#    x, t, w = (
-#        np.stack([b[0] for b in batch]),
-#        np.stack([b[1] for b in batch]),
-#        np.stack([b[2] for b in batch])
-#    )
-#
-#    return torch.FloatTensor(x), torch.IntTensor(t), torch.FloatTensor(w)
+class KHCDataModule(pl.LightningDataModule):
+    def __init__(
+        self,
+        batch_size,
+        data_dir=None,
+        n_workers=0,
+        n_jobs=-1,
+        n_records=None,
+        scaling="robust",
+        adjustment=None,
+        **kwargs,
+    ):
+        super().__init__()
+        self.adjustment = adjustment
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.n_jobs = n_jobs
+        self.n_records = n_records
+        self.n_workers = n_workers
+        self.scaling = scaling
+        self.dataset_params = dict(
+            # data_dir=self.data_dir,
+            n_jobs=self.n_jobs,
+            n_records=self.n_records,
+            scaling=self.scaling,
+            adjustment=self.adjustment,
+        )
 
+    def setup(self, stage="test"):
+        if stage == "fit":
+            raise NotImplementedError
+        elif stage == "test":
+            self.test = KHCDataset(data_dir=self.data_dir, overlap=False, **self.dataset_params)
 
-def collate_fn(batch):
+    def test_dataloader(self):
+        """Return test dataloader."""
+        return torch.utils.data.DataLoader(
+            self.test, batch_size=self.batch_size, shuffle=False, num_workers=self.n_workers, pin_memory=True,
+        )
 
-    X, y = map(torch.FloatTensor, zip(*batch))
+    @staticmethod
+    def add_dataset_specific_args(parent_parser):
+        from argparse import ArgumentParser
 
-    return X, y
-    # return torch.FloatTensor(X), torch.FloatTensor(y), torch.FloatTensor(w)
+        # DATASET specific
+        parser = ArgumentParser(parents=[parent_parser], add_help=False)
+        dataset_group = parser.add_argument_group("dataset")
+        dataset_group.add_argument("--data_dir", default="data/khc/raw/5min", type=str)
+        dataset_group.add_argument("--n_jobs", default=-1, type=int)
+        dataset_group.add_argument("--n_records", default=None, type=int)
+        dataset_group.add_argument("--scaling", default="robust", type=str)
+        dataset_group.add_argument("--adjustment", default=0, type=int)
 
+        # DATALOADER specific
+        dataloader_group = parser.add_argument_group("dataloader")
+        dataloader_group.add_argument("--batch_size", default=64, type=int)
+        dataloader_group.add_argument("--n_workers", default=20, type=int)
 
-# class KoreanSubset(Dataset):
-#     def __init__(self, dataset, record_indices, name="Train"):
-#         self.dataset = dataset
-#         self.record_indices = record_indices
-#         self.name = name
-#         self.records = [self.dataset.records[idx] for idx in self.record_indices]
-#         self.sequence_indices = (
-#             self.__get_subset_indices()
-#         )  # [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
-
-#     def __get_subset_indices(self):
-#         t = list(map(lambda x: x["record"] in self.records, self.dataset.index_to_record))
-#         return list(compress(range(len(t)), t))
-
-#     def __getitem__(self, idx):
-#         return self.dataset[self.sequence_indices[idx]]
-
-#     def __len__(self):
-#         return len(self.sequence_indices)
-
-#     def __str__(self):
-#         s = f"""
-# ======================================
-# Korean Hypersomnia Cohort Dataset - {self.name} partition
-# --------------------------------------
-# Data directory: {self.dataset.data_dir}
-# Number of records: {len(self.record_indices)}
-# First ten records: {self.records[:10]}
-# ======================================
-# """
-
-#         return s
+        return parser
 
 
 if __name__ == "__main__":
@@ -288,12 +312,18 @@ if __name__ == "__main__":
     np.random.seed(42)
     random.seed(42)
 
-    # dataset_params = dict(data_dir="./data/raw/individual_encodings", n_jobs=-1)
-    dataset_params = {}
-    dataset = KoreanDataset(**dataset_params)
-    print(dataset)
-    dataloader_params = dict(batch_size=1, shuffle=False, num_workers=0, pin_memory=True)
-    pbar = tqdm(DataLoader(dataset, **dataloader_params))
-    for idx, (x, t, record, seq_nr) in enumerate(pbar):
+    parser = argparse.ArgumentParser()
+    parser = KHCDataModule.add_dataset_specific_args(parser)
+    args = parser.parse_args()
+
+    # args.n_workers = 10
+
+    print(args)
+
+    khc = KHCDataModule(**vars(args))
+    khc.setup("test")
+    khc_test = khc.test_dataloader()
+
+    for idx, batch in enumerate(tqdm(khc_test)):
         if idx == 0:
-            print(f"{record}: {x.shape}")
+            print(batch)
