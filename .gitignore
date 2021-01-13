@@ -272,3 +272,5 @@ sleep-staging
 txt
 wandb
 results
+.DS_Store
+._.DS_Store
