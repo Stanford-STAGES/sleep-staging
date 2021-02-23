@@ -13,6 +13,8 @@ from sklearn.metrics import (
 )
 from tqdm import tqdm
 
+from utils import metrics
+
 
 def transition_matrix(y, n_classes=5, eval_frequency=[30]):
 
@@ -55,18 +57,23 @@ def evaluate_performance(record_predictions, evaluation_windows=[1, 3, 5, 10, 15
                 not_unknown_stage = record_predictions[record]['true'].sum(axis=1) == 1
 
                 if case == 'all':
-                    extract = np.full(record_predictions[record]['true'].shape[0], True) & not_unknown_stage
+                    extract = np.full(not_unknown_stage.shape, True) & not_unknown_stage
                 elif case == 'stable':
                     extract = record_predictions[record]['stable_sleep'] & not_unknown_stage
                 elif case == 'transition':
                     not_unknown_stage = record_predictions[record]['true'].sum(axis=1) == 1
                     extract = np.invert(record_predictions[record]['stable_sleep']) & not_unknown_stage
 
+                # if extract.ndim == 2:
+                #     true = record_predictions[record]["true"].transpose()
+                #     predicted = record_predictions[record]["predicted"]
+
                 # Get the true and predicted stages
                 t = record_predictions[record]["true"][extract, :].argmax(axis=1)[::eval_window]
                 p = np.mean(record_predictions[record]["predicted"][extract, :].reshape(-1, eval_window, 5), axis=1).argmax(axis=1)
 
                 # Extract the metrics
+                # acc = metrics.accuracy_score(t, p)
                 acc = accuracy_score(t, p)
                 bal_acc = balanced_accuracy_score(t, p)
                 kappa = cohen_kappa_score(t, p, labels=[0, 1, 2, 3, 4])
