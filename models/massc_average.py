@@ -31,9 +31,30 @@ from models import layers
 
 # fmt: off
 class MASSCAverage(ptl.LightningModule):
-    def __init__(self, hparams, *args, **kwargs):
+    # def __init__(self, hparams, *args, **kwargs):
+    def __init__(
+        self,
+        # batch_size=None,
+        # block_type=None,
+        # eval_frequency_sec=None,
+        # filter_base=None,
+        # kernel_size=None,
+        # learning_rate=None,
+        # momentum=None,
+        # n_blocks=None,
+        # n_channels=None,
+        # n_classes=None,
+        # n_rnn_layers=None,
+        # n_rnn_units=None,
+        # rnn_bidirectional=None,
+        # rnn_dropout=None,
+        # weight_decay=None,
+        *args,
+        **kwargs,
+    ):
         super().__init__()
-        self.save_hyperparameters({k: v for k, v in hparams.items() if not callable(v)})
+        # self.save_hyperparameters({k: v for k, v in hparams.items() if not callable(v)})
+        self.save_hyperparameters()
         self.example_input_array = torch.zeros(self.hparams.batch_size, self.hparams.n_channels, 5 * 60 * 128)
 
         # Create mixing block
@@ -328,7 +349,8 @@ class MASSCAverage(ptl.LightningModule):
             all_records = sorted(self.trainer.datamodule.test.records)
         except AttributeError: # Catch exception if we've supplied dataloaders instead of DataModule
             all_records = sorted(self.trainer.test_dataloaders[0].dataset.records)
-        true = torch.cat([out['true'] for out in output_results], dim=0).permute([0, 2, 1])
+        # true = torch.cat([out['true'] for out in output_results], dim=0).permute([0, 2, 1])
+        true = torch.cat([out['true'] for out in output_results], dim=0).transpose(2, 1)
         predicted = torch.cat([out['predicted'] for out in output_results], dim=0).permute([0, 2, 1])
         stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in output_results], dim=0)
         sequence_nrs = torch.cat([out['sequence_nr'] for out in output_results], dim=0)
@@ -392,7 +414,7 @@ class MASSCAverage(ptl.LightningModule):
 
         for r in tqdm(all_records, desc='Sorting predictions...'):
             record_idx = [idx for idx, rec in enumerate(records) if r == rec]
-            current_t = true[record_idx].reshape(-1, true.shape[-1])
+            current_t = true[record_idx].reshape(-1, *true.shape[2:])
             current_p = predicted[record_idx].reshape(-1, predicted.shape[-1])
             current_ss = stable_sleep[record_idx].reshape(-1).to(torch.bool)
             current_l = logits[record_idx].reshape(-1, logits.shape[-1])
