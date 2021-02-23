@@ -7,6 +7,7 @@ available_datamodules = {
     "stages": STAGESDataModule,
     "ssc-wsc": SscWscDataModule,
     "khc": KHCDataModule,
+    "massc_average": SscWscDataModule,
     # "isrc": ISRCDataModule,
 }
 # __all__ = ["ISRCDataset", "KoreanDataset", "SscWscPsgDataset"]

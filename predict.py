@@ -4,6 +4,7 @@ import pickle
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
+from tqdm import tqdm
 
 import numpy as np
 import pandas as pd
@@ -89,21 +90,24 @@ def run_predict():
     # TEST ON NEW DATA
     # ------------------------------------------------------------------------------- #
     results_dir = os.path.dirname(args.resume_from_checkpoint)
-    test_params = dict(num_workers=args.n_workers, pin_memory=True, shuffle=False)
 
     test_dm = []
     ds_args = model.hparams
     ds_args["n_jobs"] = args.n_jobs
-    ds_args["n_records"] = args.n_records
+    ds_args["n_records"] = None
     ds_args["n_workers"] = args.n_workers
+    ds_args["batch_size"] = args.batch_size
     ds_args["limit_test_batches"] = args.limit_test_batches
+    ds_args["adjustment"] = args.adjustment
 
-    test_dm.append(("SSC-WSC_eval", datasets.SscWscDataModule(**ds_args)),)
-    test_dm[0][1].setup("fit")
+    # test_dm.append(("SSC-WSC_eval", datasets.SscWscDataModule(**ds_args)),)
+    # test_dm[-1][1].setup("fit")
 
-    # test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
-    # test_dm[0][1].setup("test")
-
+    test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
+    test_dm[-1][1].setup("test")
+    khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
+    test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
+    test_dm[-1][1].setup("test")
     # for dm in test_dm:
     # dm[1].setup("test")
     # dm[1].setup("fit")
@@ -126,20 +130,30 @@ def run_predict():
         # predictions = trainer.test(model, test_dataloaders=tdl, verbose=False)[0]
         # predictions = trainer.test(model, datamodule=tdm, verbose=False)
 
-        try:
-            predictions = trainer.test(model, test_dataloaders=tdm.val_dataloader(), verbose=False)
-        except AttributeError:
+        if tdm.test_dataloader():
             predictions = trainer.test(model, test_dataloaders=tdm.test_dataloader(), verbose=False)
+        elif tdm.val_dataloader():
+            predictions = trainer.test(model, test_dataloaders=tdm.val_dataloader(), verbose=False)
+        else:
+            raise NotImplementedError
 
         # trainer.test(model, datamodule=tdm, verbose=False)
         if not model.use_ddp or (model.use_ddp and torch.distributed.get_rank() == 0):
             # with open(os.path.join(results_dir, f"{name}_predictions.pkl"), "rb") as pkl:
             #     predictions = pickle.load(pkl)
             predictions = predictions[0]
-            with open(os.path.join(results_dir, f"{name}_predictions.pkl"), "wb") as pkl:
-                pickle.dump(predictions, pkl)
 
-            df, cm_sub, cm_tot = utils.evaluate_performance(predictions, evaluation_windows=[1], cases=["all"])
+            os.makedirs(os.path.join(results_dir, "predictions", f"{name.lower()}"), exist_ok=True)
+            for record, record_predictions in tqdm(predictions.items()):
+                with open(
+                    os.path.join(results_dir, "predictions", f"{name.lower()}", f"preds_{record.split('.')[0]}.pkl"),
+                    "wb",
+                ) as pkl:
+                    pickle.dump(record_predictions, pkl)
+
+            df, cm_sub, cm_tot = utils.evaluate_performance(
+                predictions, evaluation_windows=[1], cases=["all", "stable"]
+            )
             with np.printoptions(precision=3, suppress=True):
                 s = ""
                 for eval_window in cm_tot.keys():

@@ -1,6 +1,8 @@
+import os
+
 import numpy as np
 from h5py import File
-from sklearn.preprocessing import *
+from sklearn.preprocessing import RobustScaler, StandardScaler
 
 
 SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
@@ -8,11 +10,16 @@ SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
 
 def get_h5_info(filename):
 
-    with File(filename, "r") as h5:
-        dataT = h5["trainD"]
-        seqs_in_file = dataT.shape[0]
+    try:
+        with File(filename, "r") as h5:
+            dataT = h5["trainD"]
+            seqs_in_file = dataT.shape[0]
+    except OSError:
+        seqs_in_file = None
 
-    return seqs_in_file
+    # print('Hej')
+
+    return seqs_in_file, os.path.basename(filename)
 
 
 def load_h5_data(filename, seg_size):
