@@ -98,11 +98,11 @@ def run_predict():
     ds_args["n_workers"] = args.n_workers
     ds_args["limit_test_batches"] = args.limit_test_batches
 
-    test_dm.append(("SSC-WSC_eval", datasets.SscWscDataModule(**ds_args)),)
-    test_dm[0][1].setup("fit")
+    # test_dm.append(("SSC-WSC_eval", datasets.SscWscDataModule(**ds_args)),)
+    # test_dm[0][1].setup("fit")
 
     # test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
-    # test_dm[0][1].setup("test")
+    # test_dm[-1][1].setup("test")
 
     # for dm in test_dm:
     # dm[1].setup("test")
@@ -121,15 +121,24 @@ def run_predict():
     # ]
     # test_dataloaders = [(td[0], DataLoader(td[1], **test_params)) for td in test_datasets]
 
+    khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
+    test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
+    test_dm[-1][1].setup("test")
+    # isrc_args = datasets.ISRCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
+    # test_dm.append(("ISRC", datasets.ISRCDataModule(**vars(isrc_args))),)
+    # test_dm[-1][1].setup("test")
+
     # for name, tdl in test_dataloaders:
     for name, tdm in test_dm:
         # predictions = trainer.test(model, test_dataloaders=tdl, verbose=False)[0]
         # predictions = trainer.test(model, datamodule=tdm, verbose=False)
 
-        try:
+        if tdm.has_setup_fit:
             predictions = trainer.test(model, test_dataloaders=tdm.val_dataloader(), verbose=False)
-        except AttributeError:
+        elif tdm.has_setup_test:
             predictions = trainer.test(model, test_dataloaders=tdm.test_dataloader(), verbose=False)
+        else:
+            raise AttributeError
 
         # trainer.test(model, datamodule=tdm, verbose=False)
         if not model.use_ddp or (model.use_ddp and torch.distributed.get_rank() == 0):
@@ -169,9 +178,7 @@ def run_predict():
                         s += f'Precision:\t{df_["Precision"].mean():.3f} +/- {df_["Precision"].std():.3f} \t|\t{precision}\n'
                         s += f'Recall:\t\t{df_["Recall"].mean():.3f} +/- {df_["Recall"].std():.3f} \t|\t{recall}\n'
                         s += f'F1: \t\t{df_["F1"].mean():.3f} +/- {df_["F1"].std():.3f} \t|\t{f1}\n'
-                        s += (
-                            f'Accuracy:\t{df_["Accuracy"].mean():.3f} +/- {df_["Accuracy"].std():.3f} \t|\t{acc:.3f}\n'
-                        )
+                        s += f'Accuracy:\t{df_["Accuracy"].mean():.3f} +/- {df_["Accuracy"].std():.3f} \t|\t{acc:.3f}\n'
                         s += f'Kappa:\t\t{df_["Kappa"].mean():.3f} +/- {df_["Kappa"].std():.3f} \t|\t{kappa:.3f}\n'
                         s += f'MCC:\t\t{df_["MCC"].mean():.3f} +/- {df_["MCC"].std():.3f} \t|\t{mcc:.3f}\n'
                         s += "\n"
@@ -184,7 +191,9 @@ def run_predict():
             # pprint.pprint(cm_tot[30])
             df.to_csv(os.path.join(results_dir, f"{name}_results.csv"))
             with open(os.path.join(results_dir, f"{name}_confusionmatrix.pkl"), "wb") as pkl:
-                pickle.dump({"confusionmatrix_subject": cm_sub, "confusionmatrix_total": cm_tot}, pkl)
+                pickle.dump(
+                    {"confusionmatrix_subject": cm_sub, "confusionmatrix_total": cm_tot,}, pkl,
+                )
 
     # def run_testing(_data, _name):
     #     predictions = trainer.test(model, test_dataloaders=_data, verbose=False)
