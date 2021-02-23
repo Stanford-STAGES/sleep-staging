@@ -169,7 +169,9 @@ class MASSCAverage(ptl.LightningModule):
         z_1 = self(x)
 
         # Return predicted logits
-        logits_1 = self.classification(z_1)
+        z_hires = (z_1.unfold(-1, 3, 3)
+                      .mean(dim=-1))
+        logits_1 = self.classification(z_hires)
 
         # Merge with average
         z = (z_1.unfold(-1, eval_frequency_sec, eval_frequency_sec)
@@ -310,7 +312,15 @@ class MASSCAverage(ptl.LightningModule):
         stable_sleep = stable_sleep[:, ::self.hparams.eval_frequency_sec]  # Implicitly assuming that stable_sleep is every second
         y = y[:, :, ::self.hparams.eval_frequency_sec]  # Implicitly assuming y is scored every sec.
         # y_hat = self.forward(X)  # TODO: fix this to use classify segments fn
+
         y_hat, y_hat_1 = self.classify_segments(X)
+
+        # Return predictions at other resolutions
+        y_hat_3s, _ = self.classify_segments(X, eval_frequency_sec=3)
+        y_hat_5s, _ = self.classify_segments(X, eval_frequency_sec=5)
+        y_hat_10s, _ = self.classify_segments(X, eval_frequency_sec=10)
+        y_hat_15s, _ = self.classify_segments(X, eval_frequency_sec=15)
+
         return {
             "predicted": y_hat.softmax(dim=1),
             "true": y,
@@ -318,6 +328,10 @@ class MASSCAverage(ptl.LightningModule):
             "sequence_nr": current_sequence,
             "stable_sleep": stable_sleep,
             "logits": y_hat_1.softmax(dim=1),
+            "y_hat_3s": y_hat_3s.softmax(dim=1),
+            "y_hat_5s": y_hat_5s.softmax(dim=1),
+            "y_hat_10s": y_hat_10s.softmax(dim=1),
+            "y_hat_15s": y_hat_15s.softmax(dim=1),
             # "data": X.cpu(),
         }
 
@@ -333,6 +347,10 @@ class MASSCAverage(ptl.LightningModule):
         stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in output_results], dim=0)
         sequence_nrs = torch.cat([out['sequence_nr'] for out in output_results], dim=0)
         logits = torch.cat([out['logits'] for out in output_results], dim=0).permute([0, 2, 1])
+        y_hat_3s = torch.cat([out['y_hat_3s'] for out in output_results], dim=0).permute([0, 2, 1])
+        y_hat_5s = torch.cat([out['y_hat_5s'] for out in output_results], dim=0).permute([0, 2, 1])
+        y_hat_10s = torch.cat([out['y_hat_10s'] for out in output_results], dim=0).permute([0, 2, 1])
+        y_hat_15s = torch.cat([out['y_hat_15s'] for out in output_results], dim=0).permute([0, 2, 1])
         # data = torch.cat([out['data'] for out in output_results], dim=0).permute([0, 2, 1])
         # records = [i for i, out in enumerate(output_results) for j, _ in enumerate(out['record'])]
 
@@ -346,6 +364,10 @@ class MASSCAverage(ptl.LightningModule):
             out_seq_nrs = [torch.zeros_like(sequence_nrs) for _ in range(dist.get_world_size())]
             out_records = [torch.zeros_like(records) for _ in range(dist.get_world_size())]
             out_logits = [torch.zeros_like(logits) for _ in range(dist.get_world_size())]
+            out_y_hat_3s = [torch.zeros_like(y_hat_3s) for _ in range(dist.get_world_size())]
+            out_y_hat_5s = [torch.zeros_like(y_hat_5s) for _ in range(dist.get_world_size())]
+            out_y_hat_10s = [torch.zeros_like(y_hat_10s) for _ in range(dist.get_world_size())]
+            out_y_hat_15s = [torch.zeros_like(y_hat_15s) for _ in range(dist.get_world_size())]
 
             dist.barrier()
             dist.all_gather(out_true, true)
@@ -354,6 +376,10 @@ class MASSCAverage(ptl.LightningModule):
             dist.all_gather(out_seq_nrs, sequence_nrs)
             dist.all_gather(out_records, records)
             dist.all_gather(out_logits, logits)
+            dist.all_gather(out_y_hat_3s, y_hat_3s)
+            dist.all_gather(out_y_hat_5s, y_hat_5s)
+            dist.all_gather(out_y_hat_10s, y_hat_10s)
+            dist.all_gather(out_y_hat_15s, y_hat_15s)
 
             if dist.get_rank() == 0:
                 true = torch.cat(out_true)
@@ -362,6 +388,11 @@ class MASSCAverage(ptl.LightningModule):
                 sequence_nrs = torch.cat(out_seq_nrs)
                 records = [int2record[r.item()] for r in torch.cat(out_records)]
                 logits = torch.cat(out_logits)
+                y_hat_3s = torch.cat(out_y_hat_3s)
+                y_hat_5s = torch.cat(out_y_hat_5s)
+                y_hat_10s = torch.cat(out_y_hat_10s)
+                y_hat_15s = torch.cat(out_y_hat_15s)
+
 
                 # acc = metrics.accuracy_score(t[s].argmax(-1), p[s].argmax(-1))
                 # cohen = metrics.cohen_kappa_score(t[s].argmax(-1), p[s].argmax(-1), labels=[0, 1, 2, 3, 4])
@@ -386,7 +417,11 @@ class MASSCAverage(ptl.LightningModule):
                 "predicted_label": [],
                 "stable_sleep": [],
                 "logits": [],
-                "seq_nr": []
+                "seq_nr": [],
+                "y_hat_3s": [],
+                "y_hat_5s": [],
+                "y_hat_10s": [],
+                "y_hat_15s": [],
             } for r in all_records
         }
 
@@ -397,6 +432,10 @@ class MASSCAverage(ptl.LightningModule):
             current_ss = stable_sleep[record_idx].reshape(-1).to(torch.bool)
             current_l = logits[record_idx].reshape(-1, logits.shape[-1])
             current_seq = sequence_nrs[record_idx]
+            current_3s = y_hat_3s[record_idx].reshape(-1, y_hat_3s.shape[-1])
+            current_5s = y_hat_5s[record_idx].reshape(-1, y_hat_5s.shape[-1])
+            current_10s = y_hat_10s[record_idx].reshape(-1, y_hat_10s.shape[-1])
+            current_15s = y_hat_15s[record_idx].reshape(-1, y_hat_15s.shape[-1])
 
             # current_t = torch.cat([t for idx, t in enumerate(true) if idx in record_idx], dim=0)
             # current_p = torch.cat([p for idx, p in enumerate(predicted) if idx in record_idx], dim=0)
@@ -409,6 +448,10 @@ class MASSCAverage(ptl.LightningModule):
             results[r]['stable_sleep'] = current_ss.cpu().numpy()
             results[r]['logits'] = current_l.cpu().numpy()
             results[r]['seq_nr'] = current_seq.cpu().numpy()
+            results[r]['yhat_3s'] = current_3s.cpu().numpy()
+            results[r]['yhat_5s'] = current_5s.cpu().numpy()
+            results[r]['yhat_10s'] = current_10s.cpu().numpy()
+            results[r]['yhat_15s'] = current_15s.cpu().numpy()
 
         return results
 
