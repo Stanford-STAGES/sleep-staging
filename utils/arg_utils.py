@@ -38,7 +38,10 @@ def get_args(print_args=False):
         temp_args.model_type = hparams["model_type"]
 
     # add args from dataset
-    parser = datasets.available_datamodules[temp_args.model_type].add_dataset_specific_args(parser)
+    try:
+        parser = datasets.available_datamodules[temp_args.model_type].add_dataset_specific_args(parser)
+    except:
+        parser = datasets.available_datamodules["ssc-wsc"].add_dataset_specific_args(parser)
     # if temp_args.model_type == "stages":
     #     parser = datasets.available_datamodules[temp_args.model_type].add_dataset_specific_args(parser)
     # else:
@@ -82,7 +85,7 @@ def get_args(print_args=False):
                 args.save_dir = os.path.join("experiments", "massc", datetime.now().strftime("%Y%m%d_%H%M%S"))
             else:
                 args.save_dir = os.path.join(
-                    "experiments", "massc", args.name, datetime.now().strftime("%Y%m%d_%H%M%S")
+                    "experiments", "massc", args.name, datetime.now().strftime("%Y%m%d_%H%M%S"),
                 )
         elif args.model_type == "utime":
             # args.save_dir = Path(os.path.join("experiments", "utime", datetime.now().strftime("%Y%m%d_%H%M%S")))
