@@ -12,6 +12,295 @@ from sklearn.preprocessing import RobustScaler, MinMaxScaler
 from .multitaper_spectrogram import multitaper_spectrogram, nanpow2db
 
 
+def view_record(
+    record_id,
+    record_predictions=None,
+    target=None,
+    pred=None,
+    logits=None,
+    fs=128,
+    spectrum_type="multitaper",
+    spectral_kws={'window_dur': 30, 'window_step': 5, 'delta_f': 1},
+    title=None,
+    save_path=None,
+    verbose=True,
+):
+    """
+    Args:
+        x (ndarray): shape (N * 30 * fs, C)
+        target (ndarray): shape (N, K) onehot encoded
+        pred (ndarray): shape (N, K)
+        logits (ndarray): shape (N * 30, K)
+    Note:
+        N: number of epochs (30 s)
+        fs: sampling frequency
+        C: number of channels
+        K: number of classes
+    """
+
+    if target is None:
+        target = record_predictions["true"]
+    if pred is None:
+        pred = record_predictions["predicted"]
+    if logits is None:
+        logits = record_predictions["logits"]
+    seqs = record_predictions["seq_nr"]
+#     print('target.shape:', target.shape)
+#     print('pred.shape:', pred.shape)
+#     print('logits.shape:', logits.shape)
+
+#     print(f"Current file: {record_id}")
+    epoch_nrs = seqs
+
+    try:
+        with File(os.path.join("./data/test/raw", record_id), "r") as f:
+            x = f["M"][seqs]  # (N, K, T)
+    except FileNotFoundError:
+        with File(os.path.join("./data/train/raw", record_id), "r") as f:
+            x = f["M"][seqs]  # (N, K, T)
+
+    M, K, T = x.shape
+    t = np.arange(0, M * T)
+    x = x.transpose(1, 0, 2).reshape(K, -1).T
+#     print('x.shape:', x.shape)
+#     print('t.shape:', t.shape)
+#     x = RobustScaler().fit_transform(x)
+#     print('target.shape:', target.shape)
+
+    if target.shape[-1] != K:
+        target = target.transpose()
+    hypnogram = target.argmax(axis=-1)
+    if pred.shape[-1] != K:
+        pred = pred.transpose()
+    if logits.shape[-1] != K:
+        logits = logits.transpose()
+    n_epochs = len(hypnogram)
+
+    hypnogram_dict = {0: "W", 1: "N1", 2: "N2", 3: "N3", 4: "R"}
+
+    # Setup colors
+    cmap = np.array(
+        [
+            [0.4353, 0.8157, 0.9353],  # W
+            [0.9490, 0.9333, 0.7725],  # N1
+            [0.9490, 0.6078, 0.5118],  # N2
+            [0.6863, 0.2078, 0.2784],  # N3
+            [0.0000, 0.4549, 0.7373],  # R
+        ],
+    )
+    displacement = np.vstack([i * np.ones(x.shape[0]) for i in range(x.shape[1])]).T
+#     print(displacement)
+
+    # Setup figure
+    fig, axes = plt.subplots(
+        figsize=(18, 8),
+        nrows=8,
+        ncols=1,
+        squeeze=True,
+        dpi=150,
+        gridspec_kw={
+#             "height_ratios": [4, 4, 3, 3, 3, 2.5, 2.5],
+            "height_ratios": [2, 2, 2, 2, 2, 0.5, 1, 1],
+            "hspace": 0.05,
+        },
+    )
+    if title is None:
+        title = f"{record_id}"
+    fig.suptitle(title)
+
+    # Plot power spectral data
+#     multitaper_spectrogram(x[:, 0], fs, [0, 25], 15., 29, [30, 5])
+#     return
+    current_ax = axes[0]
+    if spectrum_type == "multitaper":
+        if spectral_kws is None:
+            window_dur=3
+            window_step=0.1
+            delta_f=1.5
+        mts_params = dict(
+            frequency_range=[0, 25],
+            time_bandwidth=spectral_kws['window_dur'] * spectral_kws['delta_f'] / 2,
+            window_params=[spectral_kws['window_dur'], spectral_kws['window_step']],
+#             min_nfft=int(2 ** np.ceil(np.log2(np.abs(spectral_kws['window_dur'] * fs)))),
+            detrend_opt='linear'
+        )
+        Zxx, spec_t, spec_f = multitaper_spectrogram(x[:, 0], fs, **mts_params, plot_on=False, verbose=verbose)
+#         spec_f, spec_t, Zxx = signal.stft(x[:, 1], fs, nperseg=30 * 128, noverlap=25*128, nfft=int(2 ** np.ceil(np.log2(30 * fs))))
+#         Zxx = Zxx.T
+    elif spectrum_type == "cwt":
+        spec_t = np.arange(0, 3 * 30 * fs) / fs
+        w = 20.0
+        spec_f = np.linspace(0, 20, 100)
+        width = w * fs / (2 * spec_f * np.pi)
+        Zxx = signal.cwt(x[:, 1], signal.morlet2, width, w=w).T
+    vmin, vmax = np.quantile(2 * nanpow2db(np.abs(Zxx)).T, [0.1, 0.9])
+    im = current_ax.pcolormesh(
+        np.array(spec_t).flatten(), np.array(spec_f).flatten(), 2 * nanpow2db(np.abs(Zxx)).T, cmap="jet", shading="auto", vmin=vmin, vmax=vmax
+    )
+#     plt.colorbar(im, orientation='horizontal', anchor=(1., 1.))
+    current_ax.get_xaxis().set_visible(False)
+
+    # Create legend
+    legend_elements = [
+        mpl.patches.Patch(facecolor=cm, edgecolor=cm, label=lbl)
+        for cm, lbl in zip(cmap, ["W", "N1", "N2", "N3", "REM"])
+    ]
+    current_ax.legend(handles=legend_elements, loc="lower right", bbox_to_anchor=[1.0, 1.0], ncol=5)
+
+    current_ax = axes[1]
+    if spectrum_type == "multitaper":
+        if spectral_kws is None:
+            window_dur=3
+            window_step=0.1
+            delta_f=1.5
+        mts_params = dict(
+            frequency_range=[0, 25],
+            time_bandwidth=spectral_kws['window_dur'] * spectral_kws['delta_f'] / 2,
+            window_params=[spectral_kws['window_dur'], spectral_kws['window_step']],
+            min_nfft=int(2 ** np.ceil(np.log2(np.abs(spectral_kws['window_dur'] * fs)))),
+            detrend_opt='linear'
+        )
+        Zxx, spec_t, spec_f = multitaper_spectrogram(x[:, 1], fs, **mts_params, plot_on=False, verbose=verbose)
+    elif spectrum_type == "cwt":
+        spec_t = np.arange(0, 3 * 30 * fs) / fs
+        w = 20.0
+        spec_f = np.linspace(0, 20, 100)
+        width = w * fs / (2 * spec_f * np.pi)
+        Zxx = signal.cwt(x[:, 1], signal.morlet2, width, w=w).T
+    vmin, vmax = np.quantile(2 * nanpow2db(np.abs(Zxx)).T, [0.1, 0.9])
+    current_ax.pcolormesh(
+        np.array(spec_t).flatten(), np.array(spec_f).flatten(), 2 * nanpow2db(np.abs(Zxx)).T, cmap="jet", shading="auto", vmin=vmin, vmax=vmax
+    )
+    current_ax.get_xaxis().set_visible(False)
+#     return
+
+    # Plot signal data
+    current_ax = axes[2]
+    _x = RobustScaler().fit_transform(x)
+    current_ax.plot(t, _x / _x.max() - displacement, "k", linewidth=0.05)
+    current_ax.set_yticks([0, -1, -2, -3, -4])
+    current_ax.set_yticklabels(["EEG C", "EEG O", "EOG L", "EOG R", "EMG"])
+    current_ax.set_xlim(t[0], t[-1])
+    current_ax.get_xaxis().set_visible(False)
+
+    # Add vertical divider lines
+#     current_ax = axes[1]
+#     vline_coords = np.arange(0, len(hypnogram)) / 2 + t[0]
+#     for xc, h in zip(vline_coords, hypnogram):
+#         current_ax.axvline(xc + 0.5, linewidth=0.5, color="grey")
+
+    # Plot 1 s hypnodensity
+    current_ax = axes[3]
+    h = logits.T
+    hypnodensity = np.concatenate([h, h[:, -1, np.newaxis]], axis=-1)
+    y_ = np.zeros((hypnodensity.shape[0] + 1, hypnodensity.shape[1]))
+    y_[1:, :] = np.cumsum(hypnodensity, axis=0)
+    l = []
+    for n in range(hypnodensity.shape[0]):
+        l.append(
+            current_ax.fill_between(
+                np.arange(hypnodensity.shape[1]),
+                y_[n, :],
+                y_[n + 1, :],
+                edgecolor="face",
+                facecolor=cmap[n, :],
+                linewidth=0.0,
+                step="post",
+            )
+        )
+    current_ax.get_xaxis().set_visible(False)
+    current_ax.set_xlim([0, len(hypnodensity.T) - 1])
+    current_ax.set_ylim([0.0, 1.0])
+    current_ax.set_ylabel("1 s")
+    plt.setp(current_ax.get_yticklabels(), visible=False)
+    current_ax.tick_params(axis="both", which="both", length=0)
+
+    # Add vertical divider lines
+#     vline_coords = np.arange(0, hypnodensity.shape[1] // 30)
+#     for xc, h in zip(vline_coords, hypnogram):
+#         current_ax.axvline(xc * 30, linewidth=0.5, color="grey")
+
+    # Plot predicted hypnodensity at 30 s
+    current_ax = axes[4]
+    h = pred.T
+    hypnodensity = np.concatenate([h, h[:, -1, np.newaxis]], axis=-1)
+    y_ = np.zeros((hypnodensity.shape[0] + 1, hypnodensity.shape[1]))
+    y_[1:, :] = np.cumsum(hypnodensity, axis=0)
+    l = []
+    for n in range(hypnodensity.shape[0]):
+        l.append(
+            current_ax.fill_between(
+                np.arange(hypnodensity.shape[1]),
+                y_[n, :],
+                y_[n + 1, :],
+                edgecolor="face",
+                facecolor=cmap[n, :],
+                linewidth=0.0,
+                step="post",
+            )
+        )
+    plt.setp(current_ax.get_yticklabels(), visible=False)
+    current_ax.set_xlabel("Time (s)")
+    current_ax.set_ylabel("30 s")
+    current_ax.set_xlim(0, hypnodensity.shape[1] - 1)
+    current_ax.set_ylim(0.0, 1.0)
+    current_ax.tick_params(axis="y", which="both", length=0)
+    current_ax.set_xticks(np.arange(0, len(hypnogram) + 1), 0.5)
+    current_ax.set_xticklabels(np.arange(0, len(hypnogram) * 2, 1) * 15)
+    current_ax.get_xaxis().set_visible(False)
+
+    current_ax = axes[5]
+#     current_ax.plot(pred.max(axis=1))
+    entr = - (pred * np.log(pred)).sum(axis=-1)
+    current_ax.plot(entr)
+    current_ax.set_xlim(0, len(pred))
+#     current_ax.get_yaxis().set_visible(False)
+    current_ax.set_yticks([])
+    current_ax.set_ylabel('Entr', rotation=0)
+    current_ax.get_xaxis().set_visible(False)
+
+    hypno = -(pred[:, [0, 4, 1, 2, 3]]).argmax(axis=-1)
+    current_ax = axes[6]
+    current_ax.plot(hypno)
+    current_ax.set_xlim(0, len(hypno))
+    current_ax.set_ylim(-4.5, 0.5)
+    current_ax.set_yticks([0, -1, -2, -3, -4])
+    current_ax.set_yticklabels(["W", "R", "N1", "N2", "N3"])
+    current_ax.get_xaxis().set_visible(False)
+
+    current_ax = axes[7]
+    current_ax.plot(-target[:, [0, 4, 1, 2, 3]].argmax(axis=-1))
+    current_ax.set_xlim(0, len(hypnogram))
+    current_ax.set_ylim(-4.5, 0.5)
+    current_ax.set_yticks([0, -1, -2, -3, -4])
+    current_ax.set_yticklabels(["W", "R", "N1", "N2", "N3"])
+    current_ax.get_xaxis().set_visible(False)
+
+    # Add vertical divider lines, manual and predicted 30 s hypnograms
+#     manual_str_placement = 8.8
+#     auto_str_placement = 8.45
+#     for xc, h_pred, h_true, epch_nr in zip(vline_coords, hypnodensity.argmax(0)[:-1], hypnogram, epoch_nrs):
+#         current_ax.axvline(xc + 1, linewidth=0.5, color="grey")  # Divider line
+#         txt = current_ax.text(
+#             xc + 0.5, manual_str_placement, hypnogram_dict[h_true], horizontalalignment="center", color=cmap[h_true]
+#         )  # manual hypnogram
+#         txt.set_path_effects([PathEffects.withStroke(linewidth=1, foreground="grey")])
+#         txt = current_ax.text(
+#             xc + 0.5, auto_str_placement, hypnogram_dict[h_pred], horizontalalignment="center", color=cmap[h_pred]
+#         )  # automatic hypnogram
+#         txt.set_path_effects([PathEffects.withStroke(linewidth=1, foreground="gray")])
+#     #         txt = current_ax.text(xc + 0.5, 2.4, epch_nr, horizontalalignment="center")
+
+#     # Add text objects
+#     current_ax.text(0.0, manual_str_placement, "Manual", ha="left", color="grey")
+#     current_ax.text(0.0, auto_str_placement, "Automatic", ha="left", color="grey")
+    #     current_ax.text(-0.025, 1.075, 'Automatic', ha='right', color='grey')
+
+    # Save figure
+    if save_path is not None:
+        fig.savefig(f"results/{save_path}", dpi=300, bbox_inches="tight", pad_inches=0)
+    plt.close()
+    
 def extended_epoch_view(record_id, record_predictions=None, target=None, pred=None, logits=None, interval=10, seq_nr=0, fs=128, spectrum_type='multitaper', title=None, save_path=None, verbose=False):
     """
     Args:
@@ -33,7 +322,7 @@ def extended_epoch_view(record_id, record_predictions=None, target=None, pred=No
     if logits is None:
         logits = record_predictions['logits']
     seqs = record_predictions['seq_nr']
-    
+
     m_factor = int(5 / interval)
     seqs = np.array([s * m_factor + step for s in seqs for step in range(m_factor)])
         
