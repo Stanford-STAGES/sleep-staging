@@ -20,9 +20,11 @@ from .multitaper_spectrogram import multitaper_spectrogram
 from .model_utils import get_model
 from .parallel_bar import ParallelExecutor
 from .plotting import (
-    plot_segment, 
+    extended_epoch_view,
+    plot_data,
     plot_psg_hypnogram_hypnodensity,
-    extended_epoch_view
+    plot_segment,
+    view_record,
 )
 
 read_fns = {
