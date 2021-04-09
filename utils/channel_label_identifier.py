@@ -24,6 +24,7 @@ import json
 import sys
 from collections import Counter
 from pathlib import Path
+from tqdm import tqdm
 
 from pyedflib import EdfReader
 
@@ -42,16 +43,18 @@ def getEDFFiles(path2check):
     # if so then list all .edf/.EDF files
     if p.is_dir():
         print("Checking", path2check, "for edf files.")
-        edfFiles = p.glob("**/*.[EeRr][DdEe][FfCc]")  # make search case-insensitive
+        edfFiles = list(p.glob("**/*.[EeRr][DdEe][FfCc]"))  # make search case-insensitive
+        print('Removing any MSLT studies.')
+        edfFiles = [edf for edf in edfFiles if not 'mslt' in edf.stem.lower()]
     else:
         print(path2check, " is not a valid directory.")
         edfFiles = []
-    return list(edfFiles)
+    return edfFiles
 
 
 def getSignalHeaders(edfFilename):
     try:
-        print("Reading headers from ", edfFilename)
+        # print("Reading headers from ", edfFilename)
         edfR = EdfReader(str(edfFilename))
         return edfR.getSignalHeaders()
     except:
@@ -99,7 +102,7 @@ def getAllChannelLabelsWithCounts(edfFiles):
         label_list = []
     else:
         label_list = []
-        for edfFile in edfFiles:
+        for edfFile in tqdm(edfFiles):
             [label_list.append(l) for l in getChannelLabels(edfFile)]
         label_set_counts = Counter(label_list)
     return label_set_counts, num_edfs
@@ -134,7 +137,9 @@ def run(args):
         print("No files found!")
     else:
         label_set_counts, _ = getAllChannelLabelsWithCounts(edfFiles)
+        # print(label_set_counts)
         # label_set = getLabelSet(edfFiles)
+        label_list = sorted(list(label_set_counts.keys()))
         # label_list = sorted(label_set)
         print()
 
@@ -162,8 +167,10 @@ def run(args):
                 print("Selected: ", selectedLabels)
                 toFile[ch] = selectedLabels
 
-            jsonStr = json.dumps(toFile, indent=4, sort_keys=True)
-            jsonFileOut.write_text(jsonStr)
+            with open(jsonFileOut, "w") as json_file:
+                json.dump(toFile, json_file, indent=4, sort_keys=True)
+            # jsonStr = json.dumps(toFile, indent=4, sort_keys=True)
+            # jsonFileOut.write_text(jsonStr)
             print(json.dumps(toFile))
             print()
             print("JSON data written to file:", jsonFileOut)
