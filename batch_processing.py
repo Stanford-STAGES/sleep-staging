@@ -1,8 +1,13 @@
 import argparse
+import json
+import logging
 import os
+import pprint
 import random
 import tempfile
 from glob import glob
+
+os.chdir("/home/users/alexno/sleep-staging")
 
 import numpy as np
 import pandas as pd
@@ -13,18 +18,18 @@ from errors import MissingHypnogramError
 from errors import MissingSignalsError
 from errors import ReferencingError
 from process_data import process_single_file
-from utils import chunks
 
+# from utils import chunks
 
 df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
+logging.basicConfig(format="%(asctime)s %(levelname)s | %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
+logger = logging.getLogger()
 
 
 def batch_start_jobs(args):
 
     random.seed(42)
     np.random.seed(42)
-
-    data_stack = None
 
     # If multiple data folders are given (comma-delimiter)
     data_dirs = args.data_dir.split(",")
@@ -36,6 +41,7 @@ def batch_start_jobs(args):
     process_fn = batch_process_and_save
     out_dir = args.out_dir
     n_jobs = args.n_jobs
+    cohort = args.cohort
 
     # if args.encoding_type == 'cc':
     #     process_fn = batch_process_and_save_encoding
@@ -49,9 +55,10 @@ def batch_start_jobs(args):
 
     if out_dir:
         # batch_log_dir = os.path.join("/home/users/alexno/sleep-staging", out_dir, "logs")
-        batch_log_dir = os.path.join("logs", "preprocessing", encoding_type)
+        batch_log_dir = os.path.join("./logs", "preprocessing", cohort, encoding_type)
     else:
         batch_log_dir = os.path.join("/home/users/alexno/sleep-staging/batch/logs", subset, encoding_type)
+    logger.info(f"Placing batch logs in: {batch_log_dir}")
     os.makedirs(batch_log_dir, exist_ok=True)
 
     # Make a list of all the files by looping over all available data-sources
@@ -67,30 +74,36 @@ def batch_start_jobs(args):
     something_wrong = []
     missing_hyp = []
     missing_sigs = []
-    for current_file in tqdm(listF):
-        current_fid = os.path.basename(current_file).split(".")[0]
-        if df.query(f'ID == "{current_fid}"').empty and not df.query(f'ID == "{current_fid.lstrip("0")}"').empty:
-            current_fid = current_fid.lstrip("0")
-        # The subject is not in the overview file and is automatically added to the train files
-        if df.query(f'ID == "{current_fid}"').empty:
-            not_listed.append(current_file)
-        elif (df.query(f'ID == "{current_fid}"')["Sleep scoring training data"] == 1).bool():
-            listed_as_train.append(current_file)
-        elif (df.query(f'ID == "{current_fid}"')["Sleep scoring test data"] == 1).bool():
-            listed_as_test.append(current_file)
-            continue
+    if not cohort == "ihc":
+        for current_file in tqdm(listF):
+            current_fid = os.path.basename(current_file).split(".")[0]
+            if df.query(f'ID == "{current_fid}"').empty and not df.query(f'ID == "{current_fid.lstrip("0")}"').empty:
+                current_fid = current_fid.lstrip("0")
+            # The subject is not in the overview file and is automatically added to the train files
+            if df.query(f'ID == "{current_fid}"').empty:
+                not_listed.append(current_file)
+            elif (df.query(f'ID == "{current_fid}"')["Sleep scoring training data"] == 1).bool():
+                listed_as_train.append(current_file)
+            elif (df.query(f'ID == "{current_fid}"')["Sleep scoring test data"] == 1).bool():
+                listed_as_test.append(current_file)
+                continue
+            else:
+                logger.info(f"Hmm... Something is wrong with {current_file}!")
+                something_wrong.append(current_file)
+                continue
+        list_files = listF
+        if args.test:
+            if listed_as_test:
+                listF = listed_as_test
+            # if cohort == 'ihc':
+            #     if not_listed:
+            #         listF += not_listed
+            # if not_listed:
+            #     listF += not_listed
+            else:
+                listF = not_listed
         else:
-            print(f"Hmm... Something is wrong with {current_file}!")
-            something_wrong.append(current_file)
-            continue
-    list_files = listF
-    if args.test:
-        if listed_as_test:
-            listF = listed_as_test
-        else:
-            listF = not_listed
-    else:
-        listF = not_listed + listed_as_train
+            listF = not_listed + listed_as_train
 
     if args.slice:
         listF = listF[args.slice]
@@ -101,11 +114,10 @@ def batch_start_jobs(args):
     # listF = [f for f in listF if os.path.basename(f).split(".")[0] in missing]
     # random.seed(12345)
     # random.shuffle(listF)
-    n_per_batch = int(np.floor(len(listF) / n_jobs))
-    split_list = [listF[i : i + n_per_batch] for i in range(0, len(listF), n_per_batch)]
+    # n_per_batch = int(np.floor(len(listF) / n_jobs))
     # test = ['A0005_4 175057', 'A0003_4 164611', 'A0013_6 182931', 'A0008_7 033111', 'A0009_4 171358', 'A0013_7 120409', 'A0008_4 171252', 'A0001_4 165907', 'A0001_5 180135']
     if n_jobs:
-        print(f"Submitting {n_jobs} job(s)...")
+        logger.info(f"Submitting {n_jobs} job(s) for {len(listF)} EDF files...")
 
         file_chunks = [[str(s) for s in arr] for arr in np.array_split(listF, n_jobs)]
 
@@ -114,27 +126,27 @@ def batch_start_jobs(args):
 
             with open(log_filename + "_files.txt", "w") as f:
                 f.writelines(line + "\n" for line in current_filelist)
-
-                content = f"""#!/bin/bash
+            # if idx < 8:
+            content = f"""#!/bin/bash
 #
 #SBATCH --job-name="s_{idx}"
 #SBATCH -p mignot,owners,normal
-#SBATCH --time=02:30:00
+#SBATCH --time=05:00:00
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=16GB
+#SBATCH --mem=16G
 #SBATCH --output="{log_filename}.out"
 #SBATCH --error="{log_filename}.err"
 ##################################################
 
 source $PI_HOME/miniconda3/bin/activate
-conda activate pl
+conda activate stages
 cd $HOME/sleep-staging
 
 python -c 'from batch_processing import batch_chunk_wrapper; batch_chunk_wrapper({fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}", "{log_filename}")'
 """
-                with tempfile.NamedTemporaryFile(delete=False) as j:
-                    j.write(content.encode())
-                os.system("sbatch {}".format(j.name))
+            with tempfile.NamedTemporaryFile(delete=False) as j:
+                j.write(content.encode())
+            os.system("sbatch {}".format(j.name))
 
     else:
         print(f"Submitting {len(listF)} jobs...")
@@ -146,8 +158,9 @@ python -c 'from batch_processing import batch_chunk_wrapper; batch_chunk_wrapper
 #
 #SBATCH --job-name="{os.path.basename(current_file)}"
 #SBATCH -p mignot,owners,normal
-#SBATCH --time=00:10:00
+#SBATCH --time=10:00:00
 #SBATCH --cpus-per-task=2
+#SBATCH --mem=16G
 #SBATCH --output="{os.path.join(batch_log_dir, os.path.basename(current_file))}.out"
 #SBATCH --error="{os.path.join(batch_log_dir, os.path.basename(current_file))}.err"
 ##################################################
@@ -555,6 +568,7 @@ if __name__ == "__main__":
     # parser.add_argument("--data_dir", type=str, default='/oak/stanford/groups/mignot/psg/WSC_EDF/')
     # parser.add_argument("--data_dir", type=str, default="/oak/stanford/groups/mignot/psg/Korea (KHC)/SOMNO")
     parser.add_argument("--out_dir", type=str, default=None)
+    parser.add_argument("--cohort", type=str, default="")
     parser.add_argument("--fs", type=int, default=100)
     parser.add_argument("--seq_len", type=int, default=1200)
     parser.add_argument("--overlap", type=int, default=400)
@@ -564,7 +578,8 @@ if __name__ == "__main__":
     parser.add_argument("--test", action="store_true")
     parser.add_argument("--slice", type=lambda s: slice(*[int(e) if e.strip() else None for e in s.split(":")]))
     args = parser.parse_args()
-
+    # pprint.pprint(args)
+    print(json.dumps(vars(args), sort_keys=True, indent=4))
     if args.mix:
         args.encoding_dir = args.data_dir
         args.save_dir = args.out_dir
@@ -573,10 +588,40 @@ if __name__ == "__main__":
         batch_mix_encodings(args)
     else:
         # batch_chunk_wrapper(
+        #     128,
+        #     10,
+        #     0,
+        #     "test",
+        #     "raw",
+        #     "/oak/stanford/groups/mignot/alexno/sleep-staging/data/test/raw",
+        #     "logs/preprocessing/ihc/raw/datasplit_0",
+        # )
+        # batch_chunk_wrapper(
+        #     128,
+        #     10,
+        #     0,
+        #     "test",
+        #     "raw",
+        #     "/oak/stanford/groups/mignot/alexno/sleep-staging/data/test/raw",
+        #     "logs/preprocessing/ssc_wsc/raw/datasplit_0",
+        # )
+        # batch_chunk_wrapper(
         #     100, 1200, 400, "train", "cc", "/oak/stanford/groups/mignot/alexno/data/sleep-staging/ssc_wsc/cc/5min/single", "logs/preprocessing/cc/datasplit_7",
         # )
         # batch_chunk_wrapper(
-        #     100, 1200, 400, "train", "cc", "/oak/stanford/groups/mignot/alexno/data/sleep-staging/ssc_wsc/cc/5min/single", "logs/preprocessing/cc/datasplit_0",
+        #     128, 10, 0, "test", "raw", "data/isrc/raw/5min/", "logs/preprocessing/isrc/raw/datasplit_0",
+        # )
+        # batch_chunk_wrapper(
+        #     128, 10, 0, "test", "raw", "data/khc/raw/5min/", "logs/preprocessing/khc/raw/datasplit_0",
+        # )
+        # batch_chunk_wrapper(
+        #     100,
+        #     1200,
+        #     400,
+        #     "train",
+        #     "cc",
+        #     "/oak/stanford/groups/mignot/alexno/data/sleep-staging/ssc_wsc/cc/5min/single",
+        #     "logs/preprocessing/cc/datasplit_0",
         # )
         # batch_chunk_wrapper(
         #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_0",
