@@ -93,6 +93,7 @@ def run_predict():
 
     test_dm = []
     ds_args = model.hparams
+    ds_args["data_dir"] = "data/train"
     ds_args["n_jobs"] = args.n_jobs
     ds_args["n_records"] = None
     ds_args["n_workers"] = args.n_workers
@@ -102,37 +103,14 @@ def run_predict():
 
     # test_dm.append(("SSC-WSC_eval", datasets.SscWscDataModule(**ds_args)),)
     # test_dm[-1][1].setup("fit")
-
     test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
     test_dm[-1][1].setup("test")
-    khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
-    test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
-    test_dm[-1][1].setup("test")
-    # for dm in test_dm:
-    # dm[1].setup("test")
-    # dm[1].setup("fit")
-    # model.dataset_params["n_records"] = 5
-
-    # test_datasets.append(("SSC-WSC", datasets.SscWscPsgDataset(**model.dataset_params)))
-    # model.dataset_params["n_records"] = -1
-    # model.dataset_params["overlap"] = False
-    # model.dataset_params["data_dir"] = None
-    # test_datasets.append(("KHC", datasets.KoreanDataset(**model.dataset_params)))
-    # test_datasets = [
-    #     # ("SSC-WSC", datasets.SscWscPsgDataset(**model.dataset_params)),
-    #     ("KHC", datasets.KoreanDataset(**model.dataset_params)),
-    #     # ("KHC", datasets.KoreanDataset(overlap=False, scaling="robust", adjustment=30)),
-    # ]
-    # test_dataloaders = [(td[0], DataLoader(td[1], **test_params)) for td in test_datasets]
-
-    khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
-    test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
-    test_dm[-1][1].setup("test")
-    # isrc_args = datasets.ISRCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
-    # test_dm.append(("ISRC", datasets.ISRCDataModule(**vars(isrc_args))),)
+    # test_dm.append(("SSC-WSC_more-spindles", datasets.SscWscDataModule(**ds_args)),)
     # test_dm[-1][1].setup("test")
+    khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
+    test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
+    test_dm[-1][1].setup("test")
 
-    # for name, tdl in test_dataloaders:
     for name, tdm in test_dm:
         # predictions = trainer.test(model, test_dataloaders=tdl, verbose=False)[0]
         # predictions = trainer.test(model, datamodule=tdm, verbose=False)
@@ -150,6 +128,9 @@ def run_predict():
             #     predictions = pickle.load(pkl)
             predictions = predictions[0]
 
+            with open(os.path.join(results_dir, f"{name.lower()}_predictions.pkl"), "wb") as pkl:
+                pickle.dump(predictions, pkl)
+
             os.makedirs(os.path.join(results_dir, "predictions", f"{name.lower()}"), exist_ok=True)
             for record, record_predictions in tqdm(predictions.items()):
                 with open(
@@ -159,7 +140,12 @@ def run_predict():
                     pickle.dump(record_predictions, pkl)
 
             df, cm_sub, cm_tot = utils.evaluate_performance(
-                predictions, evaluation_windows=[1], cases=["all", "stable"]
+                predictions,
+                evaluation_windows=[1],
+                cases=[
+                    "all",
+                    # "stable",
+                ],
             )
             with np.printoptions(precision=3, suppress=True):
                 s = ""
