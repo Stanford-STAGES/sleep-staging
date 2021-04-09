@@ -391,6 +391,60 @@ class SscWscPsgDataset(Dataset):
         if scaler:
             x = scaler.transform(x.T).T  # (n_channels, n_samples)
 
+        ###############################################################################################
+        # --------------------------- ADD SYNTHETIC SPINDLES ---------------------------------------- #
+
+        # if current_record == "N4499_2 092211.h5" and current_sequence == 20:
+        #     print("\nBAAAD BOIII")
+
+        #     if True:
+        #         # Add a synthetic spindle
+        #         print("SPINDLEEEEEES")
+        #         import matplotlib.pyplot as plt
+        #         from scipy import signal
+        #         import utils
+
+        #         utils.plot_data(x.T, t.T, save_path="before_spindles.png")
+
+        #         insertion_points = [
+        #             (3 * 30 + 10) * 128,
+        #             (3 * 30 + 2) * 128,
+        #             (3 * 30 + 5) * 128,
+        #             (3 * 30 + 10) * 128,
+        #             (3 * 30 + 25) * 128,
+        #         ]  # three 30 sepochs in plus 10 s, 128 Hz
+        #         channels = [0, 1, 0, 1, 1]
+        #         spindle_lengths = [5, 3, 2, 2, 3]  # seconds
+        #         spindle_frequencies = 3 * np.random.sample(len(channels)) + 12  # Hz
+        #         spindle_amplitude = 1.25
+
+        #         augmented_x = np.zeros(x.T.shape)
+        #         for idx, (insertion_point, spindle_length, channel, spindle_frequency) in enumerate(
+        #             zip(insertion_points, spindle_lengths, channels, spindle_frequencies)
+        #         ):
+        #             spindle_t = np.linspace(
+        #                 -spindle_length / 2, spindle_length / 2, spindle_length * 128, endpoint=False
+        #             )
+        #             spindle = spindle_amplitude * signal.gausspulse(
+        #                 spindle_t, fc=spindle_frequency, bw=1 / (7.5 * spindle_length)
+        #             )
+        #             plt.figure()
+        #             plt.plot(spindle_t, spindle)
+        #             plt.xlabel("Time (s)")
+        #             plt.savefig(f"results/synthetic_spindle_{idx:02}.png")
+
+        #             augmented_x[insertion_point : insertion_point + spindle_length * 128, channel] = spindle
+
+        #         x += augmented_x.T
+        #         plt.figure(figsize=(16, 2))
+        #         plt.plot(np.arange(0, 30 * 128) / 128, augmented_x[3 * 30 * 128 : 4 * 30 * 128, :2], linewidth=0.5)
+        #         plt.xlabel("Time (s)")
+        #         plt.ylim([-2, 2])
+        #         plt.legend(["EEG C", "EEG O"])
+        #         # plt.xlim([])
+        #         plt.savefig("results/synthetic_spindles.png", dpi=300, bbox_inches="tight", pad_inches=0)
+        #         utils.plot_data(x.T, t.T, save_path="more_spindles.png")
+
         return x, t, current_record, current_sequence, stable_sleep
 
     def __str__(self):
@@ -433,6 +487,7 @@ class SscWscPsgSubset(Dataset):
         self.balanced_sampling = balanced_sampling
         self.records = [self.dataset.records[idx] for idx in self.record_indices]
         if self.balanced_sampling:
+            print('Using balanced sampling scheme')
             self.sequence_indices = self._get_subset_class_indices()
         else:
             self.sequence_indices = (
@@ -510,7 +565,7 @@ class SscWscDataModule(pl.LightningDataModule):
         self.n_records = n_records
         self.n_workers = n_workers
         self.scaling = scaling
-        self.data = {"train": os.path.join(data_dir, "train"), "test": os.path.join(data_dir, "test")}
+        self.data = {"train": data_dir, "test": "data/test/raw"}
         self.dataset_params = dict(
             # data_dir=self.data_dir,
             cv=self.cv,
@@ -570,7 +625,7 @@ class SscWscDataModule(pl.LightningDataModule):
         dataset_group.add_argument("--data_dir", default="data/train/raw/individual_encodings", type=str)
         dataset_group.add_argument("--eval_ratio", default=0.1, type=float)
         dataset_group.add_argument("--n_jobs", default=-1, type=int)
-        dataset_group.add_argument("--n_records", default=-1, type=int)
+        dataset_group.add_argument("--n_records", default=None, type=int)
         dataset_group.add_argument("--scaling", default=None, type=str)
         dataset_group.add_argument("--adjustment", default=0, type=int)
         dataset_group.add_argument("--cv", default=None, type=int)
