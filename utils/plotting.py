@@ -660,7 +660,21 @@ def extended_epoch_view(
             
     plt.close()
 
-def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=None, pred=None, logits=None, interval=10, seq_nr=0, fs=128, spectrum_type='multitaper', title=None, save_path=None, verbose=False):
+
+def plot_psg_hypnogram_hypnodensity(
+    record_id,
+    record_predictions=None,
+    target=None,
+    pred=None,
+    logits=None,
+    interval=10,
+    seq_nr=0,
+    fs=128,
+    spectrum_type="multitaper",
+    title=None,
+    save_path=None,
+    verbose=False,
+):
     """
     Args:
         x (ndarray): shape (N * 30 * fs, C)
@@ -675,15 +689,15 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
     """
 
     if target is None:
-        target = record_predictions['true']
+        target = record_predictions["true"]
         # print('target.shape:', target.shape)
     if pred is None:
-        pred = record_predictions['predicted']
+        pred = record_predictions["predicted"]
         # print('pred.shape:', pred.shape)
     if logits is None:
-        logits = record_predictions['logits']
+        logits = record_predictions["logits"]
         # print('logits.shape:', logits.shape)
-    seqs = record_predictions['seq_nr']
+    seqs = record_predictions["seq_nr"]
     
 #     if interval != 5:
     m_factor = int(5 / interval)
@@ -691,36 +705,36 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
 #     print('seq:', seqs)
 #         print('seq_new:', [s * m_factor + step for s in seqs for step in range(m_factor)])
         
-    print(f'Current file: {record_id}')
-    print(f'Min. avail. epoch: {seqs.min()}')
-    print(f'Max. avail. epoch: {seqs.max()}')
-    assert (seq_nr <= seqs.max()) & (seq_nr >= seqs.min()), \
-        (f'Sequence nr. must be between {seqs.min()} and {seqs.max()}. ' \
-         f'Supplied index {seq_nr}.')
+    print(f"Current file: {record_id}")
+    print(f"Min. avail. epoch: {seqs.min()}")
+    print(f"Max. avail. epoch: {seqs.max()}")
+    assert (seq_nr <= seqs.max()) & (seq_nr >= seqs.min()), (
+        f"Sequence nr. must be between {seqs.min()} and {seqs.max()}. " f"Supplied index {seq_nr}."
+    )
 #     epoch_nrs = seqs
-    epoch_nrs = np.array([x*m_factor + y for x in seqs for y in range(int(10 / m_factor))])
+    epoch_nrs = np.array([x * m_factor + y for x in seqs for y in range(int(10 / m_factor))])
     print(epoch_nrs.shape)
     # print(seqs)
     # print('seqs.shape:', seqs.shape)
-    ss = record_predictions['stable_sleep']
+    ss = record_predictions["stable_sleep"]
     # print('ss.shape:', ss.shape)
 
     try:
-        with File(os.path.join('./data/ssc_wsc/raw/5min/test', record_id), 'r') as f:
-            x = f['M'][:]  # (N, K, T)
+        with File(os.path.join("./data/ssc_wsc/raw/5min/test", record_id), "r") as f:
+            x = f["M"][:]  # (N, K, T)
     except FileNotFoundError:
-        with File(os.path.join('./data/ssc_wsc/raw/5min/train', record_id), 'r') as f:
-            x = f['M'][:]  # (N, K, T)
+        with File(os.path.join("./data/ssc_wsc/raw/5min/train", record_id), "r") as f:
+            x = f["M"][:]  # (N, K, T)
     N, K, T = x.shape
     time = np.arange(0, np.prod(x.shape) // K).reshape(N, T)
-    print('time.shape: ', time.shape)
+    print("time.shape: ", time.shape)
             
     # Test the interval is conforming to the number of 5 min sequences in file
 #     print(f'N % 2 == {N % 2}')
 #     if (N % 2 == 1):
     if (N * 5 * 60) % (60 * interval):
         pad_amount = int((N * 5 * 60) % (60 * interval))  # pad amount in seconds
-        print(f'Padding: {pad_amount} seconds')
+        print(f"Padding: {pad_amount} seconds")
 #         print('time.shape: ', time.shape)
         time = np.pad(time, [(0, np.ceil(pad_amount / (5 * 60)).astype(int)), (0, 0)])
 #         print('time.shape: ', time.shape)
@@ -737,21 +751,18 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
         logits = np.pad(logits, [(0, pad_amount), (0, 0)])
 #         print('logits.shape:', logits.shape)
     
-
 #     time = (np.arange(0, np.prod(x.shape) // K).reshape(-1, int(interval * 60 * fs)) / (fs * 60))[seqs]  # (M, T)
 #     if interval != 5:  # files are saved in 5 min sequences
 #     print(seqs)
-    x = (x.transpose(1, 0, 2)
-          .reshape(K, -1)
-          .reshape(K, -1, int(interval * 60 * fs))
-          .transpose(1, 0, 2))[seqs]  # (M, K, T)
-    time = (time.reshape(-1)
-                .reshape(-1, int(interval * 60 * fs)) / (fs * 60))[seqs]  # (M, T)
+    x = (x.transpose(1, 0, 2).reshape(K, -1).reshape(K, -1, int(interval * 60 * fs)).transpose(1, 0, 2))[
+        seqs
+    ]  # (M, K, T)
+    time = (time.reshape(-1).reshape(-1, int(interval * 60 * fs)) / (fs * 60))[seqs]  # (M, T)
 #     x = x[seqs]  # (M, K, T)
 #     time = (np.arange(0, np.prod(x.shape) // 5).reshape(-1, 5 * 60 * fs) / (fs * 60))
 #     print('hej')
     M, _, T = x.shape
-    print(f'M: {M}, T: {T}')
+    print(f"M: {M}, T: {T}")
 #     print(f'x[0, 0, 0:10]: {x[0, 0, 0:10]}')
     
 #     print(time.shape)
@@ -760,28 +771,19 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
     seq_idx_vec = slice(seq_idx - 1, seq_idx + 2)
     print(seq_idx_vec)
     t = time[seq_idx_vec].flatten()
-    x = (x.transpose(0, 2, 1)  # (M, T, K)
-          .reshape(-1, K))  # (MxT, K)
-    x = ((x / 
-          x.max(axis=0))
-           .reshape(-1, int(interval * 60 * fs), K))[seq_idx_vec]  # (L, K)
+    x = x.transpose(0, 2, 1).reshape(-1, K)  # (M, T, K)  # (MxT, K)
+    x = ((x / x.max(axis=0)).reshape(-1, int(interval * 60 * fs), K))[seq_idx_vec]  # (L, K)
     x = x.transpose(2, 0, 1).reshape(5, -1).T
-    print('x.shape:', x.shape)
+    print("x.shape:", x.shape)
 #     print('t.shape:', t.shape)
 #     print('x.shape:', x.shape)
 #     print('target.shape:', target.shape)
 #     print('pred.shape:', pred.shape)
 #     print('logits.shape:', logits.shape)
-    target = (target.transpose(1, 0)
-                    .reshape(K, -1, int(2 * interval))
-                    .transpose(1, 2, 0))[seq_idx_vec]
-    pred = (pred.transpose(1, 0)
-                .reshape(K, -1, int(2 * interval))
-                .transpose(1, 2, 0))[seq_idx_vec]
-    logits = (logits.transpose(1, 0)
-                    .reshape(K, -1, int(interval * 60))
-                    .transpose(1, 2, 0))[seq_idx_vec]  # (M, T, K)
-    logits = (logits.transpose())
+    target = (target.transpose(1, 0).reshape(K, -1, int(2 * interval)).transpose(1, 2, 0))[seq_idx_vec]
+    pred = (pred.transpose(1, 0).reshape(K, -1, int(2 * interval)).transpose(1, 2, 0))[seq_idx_vec]
+    logits = (logits.transpose(1, 0).reshape(K, -1, int(interval * 60)).transpose(1, 2, 0))[seq_idx_vec]  # (M, T, K)
+    logits = logits.transpose()
     epoch_nrs = epoch_nrs.reshape(-1, int(interval * 2))[seq_idx_vec]
 #     print('target.shape:', target.shape)
 #     print('pred.shape:', pred.shape)
@@ -810,14 +812,22 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
     
     # Setup colors
     cmap = np.array(
-        [[0.4353, 0.8157, 0.9353], # W
-         [0.9490, 0.9333, 0.7725], # N1
-         [0.9490, 0.6078, 0.5118], # N2
-         [0.6863, 0.2078, 0.2784], # N3
-         [0.0000, 0.4549, 0.7373]],# R
+        [
+            [0.4353, 0.8157, 0.9353],  # W
+            [0.9490, 0.9333, 0.7725],  # N1
+            [0.9490, 0.6078, 0.5118],  # N2
+            [0.6863, 0.2078, 0.2784],  # N3
+            [0.0000, 0.4549, 0.7373],
+        ],  # R
     )
     displacement = np.vstack(
-        [0 * np.ones(x.shape[0]), 1 * np.ones(x.shape[0]), 2 * np.ones(x.shape[0]), 3 * np.ones(x.shape[0]), 4 * np.ones(x.shape[0])]
+        [
+            0 * np.ones(x.shape[0]),
+            1 * np.ones(x.shape[0]),
+            2 * np.ones(x.shape[0]),
+            3 * np.ones(x.shape[0]),
+            4 * np.ones(x.shape[0]),
+        ]
     ).T
     
 #     window_dur = 3
@@ -838,17 +848,17 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
         squeeze=True, 
         dpi=150, 
         gridspec_kw={
-            'height_ratios': [3, 3, 1, 1], 
+            "height_ratios": [3, 3, 1, 1],
 #             'width_ratios': [15, 1],
 #             'wspace': 0.05
-        }
+        },
     )
 #     if title is not None:
 #         title += f' | Seq. nr. {seq_nr}'
         
 #     else:
     if title is None:
-        title = f'{record_id} | Seq. nr. {seq_nr}'
+        title = f"{record_id} | Seq. nr. {seq_nr}"
     fig.suptitle(title)
     
     # Plot signal data
@@ -859,7 +869,6 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
     current_ax.set_yticklabels(["EEG C", "EEG O", "EOG L", "EOG R", "EMG"])
     current_ax.set_xlim(t[0], t[-1])
     current_ax.get_xaxis().set_visible(False)
-    
     
     # Plot power spectral data
     current_ax = axes[0]
@@ -876,7 +885,7 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
 #     stft_f, stft_t, Zxx = signal.stft(x[:, 0], **stft_params)
 #     current_ax.pcolormesh(stft_t, stft_f[stft_f < 20], 10 * np.log10(np.abs(Zxx[stft_f < 20])), cmap='jet')
     
-    if spectrum_type == 'multitaper':
+    if spectrum_type == "multitaper":
         window_dur = 6
         window_step = 0.1
         delta_f = 1
@@ -887,17 +896,15 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
             min_nfft=int(2 ** np.ceil(np.log2(np.abs(window_dur * fs)))),
         )
         Zxx, spec_t, spec_f = multitaper_spectrogram(x[:, 1], fs, **mts_params, plot_on=False, verbose=verbose)
-        print('spec_f.shape:', np.array(spec_f).flatten().shape)
-    elif spectrum_type == 'cwt':
+        print("spec_f.shape:", np.array(spec_f).flatten().shape)
+    elif spectrum_type == "cwt":
         spec_t = np.arange(0, 3 * 30 * fs) / fs
-        w = 20.
+        w = 20.0
         spec_f = np.linspace(0, 20, 100)
         width = w * fs / (2 * spec_f * np.pi)
         Zxx = signal.cwt(x[:, 0], signal.morlet2, width, w=w).T
         
-    current_ax.pcolormesh(np.array(spec_t).flatten(), np.array(spec_f).flatten(), nanpow2db(Zxx).T, cmap='jet')
-
-    
+    current_ax.pcolormesh(np.array(spec_t).flatten(), np.array(spec_f).flatten(), nanpow2db(Zxx).T, cmap="jet")
     
 #     print('nperseg: ', nperseg)
 #     print('nfft: ', nfft)
@@ -948,24 +955,34 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
 #     current_ax = axes[1, 0]
     current_ax = axes[2]
     h = logits.T
-    print('h.shape:', h.shape)
+    print("h.shape:", h.shape)
     hypnodensity = np.concatenate([h, h[:, -1, np.newaxis]], axis=-1)
     y_ = np.zeros((hypnodensity.shape[0] + 1, hypnodensity.shape[1]))
     y_[1:, :] = np.cumsum(hypnodensity, axis=0)
     l = []
     for n in range(hypnodensity.shape[0]):
-        l.append(current_ax.fill_between(np.arange(hypnodensity.shape[1]), y_[n, :], y_[n + 1, :], edgecolor="face", facecolor=cmap[n, :], linewidth=0.0, step='post'))
+        l.append(
+            current_ax.fill_between(
+                np.arange(hypnodensity.shape[1]),
+                y_[n, :],
+                y_[n + 1, :],
+                edgecolor="face",
+                facecolor=cmap[n, :],
+                linewidth=0.0,
+                step="post",
+            )
+        )
     current_ax.get_xaxis().set_visible(False)
     current_ax.set_xlim([0, len(hypnodensity.T) - 1])
     current_ax.set_ylim([0.0, 1.0])
-    current_ax.set_ylabel('1 s')
+    current_ax.set_ylabel("1 s")
     plt.setp(current_ax.get_yticklabels(), visible=False)
-    current_ax.tick_params(axis='both', which='both', length=0)
+    current_ax.tick_params(axis="both", which="both", length=0)
     
     # Add vertical divider lines
     vline_coords = np.arange(0, hypnodensity.shape[1] // 30)
     for xc, h in zip(vline_coords, hypnogram):
-        current_ax.axvline(xc*30, linewidth=0.5, color="grey")
+        current_ax.axvline(xc * 30, linewidth=0.5, color="grey")
 
     # Plot predicted hypnodensity at 30 s
 #     current_ax = axes[2, 0]
@@ -976,26 +993,40 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
     y_[1:, :] = np.cumsum(hypnodensity, axis=0)
     l = []
     for n in range(hypnodensity.shape[0]):
-        l.append(current_ax.fill_between(np.arange(hypnodensity.shape[1]), y_[n, :], y_[n + 1, :], edgecolor="face", facecolor=cmap[n, :], linewidth=0.0, step='post'))
+        l.append(
+            current_ax.fill_between(
+                np.arange(hypnodensity.shape[1]),
+                y_[n, :],
+                y_[n + 1, :],
+                edgecolor="face",
+                facecolor=cmap[n, :],
+                linewidth=0.0,
+                step="post",
+            )
+        )
 #     axes[2, 0].get_xaxis().set_visible(False)
     plt.setp(current_ax.get_yticklabels(), visible=False)
-    current_ax.set_xlabel('Time (min)')
-    current_ax.set_ylabel('30 s')
+    current_ax.set_xlabel("Time (min)")
+    current_ax.set_ylabel("30 s")
     current_ax.set_xlim(0, hypnodensity.shape[1] - 1)
 #     print('hypnodensity.shape', hypnodensity.shape)
     current_ax.set_ylim(0.0, 1.0)
-    current_ax.tick_params(axis='y', which='both', length=0)
+    current_ax.tick_params(axis="y", which="both", length=0)
     current_ax.set_xticks(np.arange(0, hypnodensity.shape[1], 4))
-    current_ax.set_xticklabels(np.arange(0, hypnodensity.shape[1], 4) // 2 )
+    current_ax.set_xticklabels(np.arange(0, hypnodensity.shape[1], 4) // 2)
     
     # Add vertical divider lines, manual and predicted 30 s hypnograms
     print(epoch_nrs)
     for xc, h_pred, h_true, epch_nr in zip(vline_coords, hypnodensity.argmax(0)[:-1], hypnogram, epoch_nrs):
-        current_ax.axvline(xc + 1, linewidth=0.5, color="grey") # Divider line
-        txt = current_ax.text(xc + 0.5, 7-1.25, hypnogram_dict[h_true], horizontalalignment="center", color=cmap[h_true])  # manual hypnogram
-        txt.set_path_effects([PathEffects.withStroke(linewidth=1, foreground='grey')])
-        txt = current_ax.text(xc + 0.5, 1.075, hypnogram_dict[h_pred], horizontalalignment="center", color=cmap[h_pred])# automatic hypnogram
-        txt.set_path_effects([PathEffects.withStroke(linewidth=1, foreground='gray')])
+        current_ax.axvline(xc + 1, linewidth=0.5, color="grey")  # Divider line
+        txt = current_ax.text(
+            xc + 0.5, 7 - 1.25, hypnogram_dict[h_true], horizontalalignment="center", color=cmap[h_true]
+        )  # manual hypnogram
+        txt.set_path_effects([PathEffects.withStroke(linewidth=1, foreground="grey")])
+        txt = current_ax.text(
+            xc + 0.5, 1.075, hypnogram_dict[h_pred], horizontalalignment="center", color=cmap[h_pred]
+        )  # automatic hypnogram
+        txt.set_path_effects([PathEffects.withStroke(linewidth=1, foreground="gray")])
         txt = current_ax.text(xc + 0.5, 2.4, epch_nr, horizontalalignment="center") 
     
 #     # Add manual and predicted 30 s hypnograms
@@ -1007,8 +1038,8 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
 #     for xc, h in zip(vline_coords, hypnodensity.argmax(0)[:-1]):
         
     # Add text objects
-    current_ax.text(-0.2, 7-1.25, 'Manual', ha='right', color='grey')
-    current_ax.text(-0.2, 1.075, 'Automatic', ha='right', color='grey')
+    current_ax.text(-0.2, 7 - 1.25, "Manual", ha="right", color="grey")
+    current_ax.text(-0.2, 1.075, "Automatic", ha="right", color="grey")
     
     # ADDITIONAL HOUSEKEEPING
 #     fig.delaxes(axes[1, 1])
@@ -1021,11 +1052,11 @@ def plot_psg_hypnogram_hypnodensity(record_id, record_predictions=None, target=N
         
     # Save figure
     if save_path is not None:
-        fig.savefig(f'results/{save_path}', dpi=300, bbox_inches='tight', pad_inches=0)
+        fig.savefig(f"results/{save_path}", dpi=300, bbox_inches="tight", pad_inches=0)
+
         
 #     plt.show()
-#     plt.close()
-    
+    plt.close()
 
 
 def plot_hypnodensity(logits, preds, trues, title=None, save_path=None):
@@ -1036,11 +1067,13 @@ def plot_hypnodensity(logits, preds, trues, title=None, save_path=None):
     
     # Setup colors
     cmap = np.array(
-        [[0.4353, 0.8157, 0.9353], # W
-         [0.9490, 0.9333, 0.7725], # N1
-         [0.9490, 0.6078, 0.5118], # N2
-         [0.6863, 0.2078, 0.2784], # N3
-         [0.0000, 0.4549, 0.7373]],# R
+        [
+            [0.4353, 0.8157, 0.9353],  # W
+            [0.9490, 0.9333, 0.7725],  # N1
+            [0.9490, 0.6078, 0.5118],  # N2
+            [0.6863, 0.2078, 0.2784],  # N3
+            [0.0000, 0.4549, 0.7373],
+        ],  # R
     )
     
     # Plot the hypnodensity
@@ -1050,17 +1083,30 @@ def plot_hypnodensity(logits, preds, trues, title=None, save_path=None):
     y_[1:, :] = np.cumsum(hypnodensity, axis=0)
     l = []
     for n in range(hypnodensity.shape[0]):
-        l.append(ax[0].fill_between(np.arange(hypnodensity.shape[1]), y_[n, :], y_[n + 1, :], edgecolor="face", facecolor=cmap[n, :], linewidth=0.0, step='post'))
+        l.append(
+            ax[0].fill_between(
+                np.arange(hypnodensity.shape[1]),
+                y_[n, :],
+                y_[n + 1, :],
+                edgecolor="face",
+                facecolor=cmap[n, :],
+                linewidth=0.0,
+                step="post",
+            )
+        )
     ax[0].get_xaxis().set_visible(False)
     ax[0].set_xlim(0, hypnodensity.shape[1] - 1)
     ax[0].set_ylim(0.0, 1.0)
-    ax[0].set_ylabel('1 s')
+    ax[0].set_ylabel("1 s")
     plt.setp(ax[0].get_yticklabels(), visible=False)
-    ax[0].tick_params(axis='both', which='both', length=0)
+    ax[0].tick_params(axis="both", which="both", length=0)
     
     # Create legend
-    legend_elements = [mpl.patches.Patch(facecolor=cm, edgecolor=cm, label=lbl) for cm, lbl in zip(cmap, ['W', 'N1', 'N2', 'N3', 'REM'])]
-    ax[0].legend(handles=legend_elements, loc='lower center', bbox_to_anchor=[0.5, 1.0], ncol=5)
+    legend_elements = [
+        mpl.patches.Patch(facecolor=cm, edgecolor=cm, label=lbl)
+        for cm, lbl in zip(cmap, ["W", "N1", "N2", "N3", "REM"])
+    ]
+    ax[0].legend(handles=legend_elements, loc="lower center", bbox_to_anchor=[0.5, 1.0], ncol=5)
 #     sns.despine(top=True, bottom=True, left=True, right=True)
 #     plt.tight_layout()
 
@@ -1071,37 +1117,47 @@ def plot_hypnodensity(logits, preds, trues, title=None, save_path=None):
     y_[1:, :] = np.cumsum(hypnodensity, axis=0)
     l = []
     for n in range(hypnodensity.shape[0]):
-        l.append(ax[1].fill_between(np.arange(hypnodensity.shape[1]), y_[n, :], y_[n + 1, :], edgecolor="face", facecolor=cmap[n, :], linewidth=0.0, step='post'))
+        l.append(
+            ax[1].fill_between(
+                np.arange(hypnodensity.shape[1]),
+                y_[n, :],
+                y_[n + 1, :],
+                edgecolor="face",
+                facecolor=cmap[n, :],
+                linewidth=0.0,
+                step="post",
+            )
+        )
     ax[1].get_xaxis().set_visible(False)
     ax[1].set_xlim(0, hypnodensity.shape[1] - 1)
     ax[1].set_ylim(0.0, 1.0)
-    ax[1].set_ylabel('30 s')
+    ax[1].set_ylabel("30 s")
     plt.setp(ax[1].get_yticklabels(), visible=False)
-    ax[1].tick_params(axis='both', which='both', length=0)
+    ax[1].tick_params(axis="both", which="both", length=0)
 
     # Plot predicted hyponogram
     ax[2].plot(preds.argmax(axis=-1))
     ax[2].set_xlim(0, trues.shape[0] - 1)
-    ax[2].set_ylim(-.5, 4.5)
+    ax[2].set_ylim(-0.5, 4.5)
     ax[2].get_xaxis().set_visible(False)
     ax[2].set_yticks([0, 1, 2, 3, 4])
-    ax[2].set_yticklabels(['W', 'N1', 'N2', 'N3', 'R'])
-    ax[2].set_ylabel('Automatic')
+    ax[2].set_yticklabels(["W", "N1", "N2", "N3", "R"])
+    ax[2].set_ylabel("Automatic")
 
     # Plot true hyponogram
     ax[3].plot(trues.argmax(axis=-1))
     ax[3].set_xlim(0, trues.shape[0] - 1)
     ax[3].set_ylim(-0.5, 4.5)
     ax[3].set_yticks([0, 1, 2, 3, 4])
-    ax[3].set_yticklabels(['W', 'N1', 'N2', 'N3', 'R'])
+    ax[3].set_yticklabels(["W", "N1", "N2", "N3", "R"])
     ax[3].set_xticks(np.arange(0, trues.shape[0] - 1, 20))
     ax[3].set_xticklabels(np.arange(0, trues.shape[0] - 1, 20) * 30 // 60)
-    ax[3].set_xlabel('Time (min)')
-    ax[3].set_ylabel('Manual')
+    ax[3].set_xlabel("Time (min)")
+    ax[3].set_ylabel("Manual")
     
     # Save figure
     if save_path is not None:
-        f.savefig(f'results/{save_path}', dpi=300, bbox_inches='tight', pad_inches=0)
+        f.savefig(f"results/{save_path}", dpi=300, bbox_inches="tight", pad_inches=0)
 #     plt.close()
     plt.show()
 
