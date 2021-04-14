@@ -5,6 +5,11 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from models.vae_components import (
+    slasnista_encoder,
+    slasnista_decoder,
+)
+
 
 class Encoder(nn.Module):
     def __init__(
@@ -37,6 +42,7 @@ class VAE(pl.LightningModule):
     def __init__(
         self,
         kernel_width: int = 3,
+        enc_type: str = "slasnista",
         kl_coeff: float = 0.1,
         latent_dim: int = 256,
         lr: float = 1e-5,
@@ -51,8 +57,14 @@ class VAE(pl.LightningModule):
             self.hparams.batch_size, self.hparams.n_channels, self.hparams.sequence_length
         )
 
-        self.encoder = Encoder(self.hparams)
-        self.decoder = Decoder(self.hparams)
+        valid_encoders = {"slasnista": {"enc": slasnista_encoder, "dec": slasnista_decoder}}
+
+        if enc_type not in valid_encoders:
+            self.encoder = Encoder(self.hparams)
+            self.decoder = Decoder(self.hparams)
+        else:
+            self.encoder = valid_encoders[enc_type]["enc"](self.hparams)
+            self.decoder = valid_encoders[enc_type]["dec"](self.hparams)
 
         self.fc_mu = nn.Linear(self.hparams.n_filters, self.hparams.latent_dim)
         self.fc_var = nn.Linear(self.hparams.n_filters, self.hparams.latent_dim)
