@@ -59,7 +59,10 @@ def evaluate_performance(record_predictions, evaluation_windows=[1, 3, 5, 10, 15
                 if case == 'all':
                     extract = np.full(not_unknown_stage.shape, True) & not_unknown_stage
                 elif case == 'stable':
-                    extract = record_predictions[record]['stable_sleep'] & not_unknown_stage
+                    if record_predictions[record]['stable_sleep'].shape > not_unknown_stage.shape:
+                        extract = record_predictions[record]['stable_sleep'].reshape(-1, 30).mean(axis=-1, dtype=bool) & not_unknown_stage
+                    else:
+                        extract = record_predictions[record]['stable_sleep'] & not_unknown_stage
                 elif case == 'transition':
                     not_unknown_stage = record_predictions[record]['true'].sum(axis=1) == 1
                     extract = np.invert(record_predictions[record]['stable_sleep']) & not_unknown_stage
