@@ -1,6 +1,10 @@
-# Name
+# sleep-staging
 
-## Description
+This repository contains source code used for training sleep stage detection models presented in Stephansen & Olesen, et *al*. Neural network analysis of sleep stages enables efficient diagnosis of narcolepsy. *Nat Commun* **9**, 5229 (2018). [DOI:10.1038/s41467-018-07229-3](https://doi.org/10.1038/s41467-018-07229-3).
+
+This is a work in progress, and will be updated regularly.
+
+<!-- ## Description
 
 ## Installation
 
@@ -16,7 +20,7 @@
 
 ## Contributing
 
-## License
+## License -->
 
 <!-- # Description
 
