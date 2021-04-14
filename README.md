@@ -8,6 +8,10 @@
 
 ## How to run
 
+### Training
+
+### Testing
+
 ## Citation
 
 ## Contributing
