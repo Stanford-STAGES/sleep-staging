@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+activation_fns = {'relu': nn.ReLU, 'swish': nn.SiLU, 'elu': nn.ELU, 'leaky': nn.LeakyReLU}
+
 
 class BottleneckBlock(nn.Module):
     def __init__(self, n_filters_in, n_filters, kernel_size, strided=False):
@@ -101,13 +103,15 @@ class ResidualBlock(nn.Module):
 
 
 class SimpleBlock(nn.Module):
-    def __init__(self, n_filters_in, n_filters, kernel_size, strided=False):
+    def __init__(self, n_filters_in, n_filters, kernel_size, dilation, activation='relu', strided=False):
         super().__init__()
         self.filters_in = n_filters_in
         self.filters = n_filters
         self.kernel_size = kernel_size
-        self.padding = kernel_size // 2
+        self.dilation = dilation
+        self.padding = dilation * (kernel_size // 2)
         self.stride = 2 if strided else 1
+        self.activation = activation_fns[activation]
 
         self.block = nn.Sequential(
             nn.Conv1d(
@@ -116,10 +120,12 @@ class SimpleBlock(nn.Module):
                 kernel_size=self.kernel_size,
                 stride=self.stride,
                 padding=self.padding,
+                dilation=self.dilation,
                 bias=False,
             ),
             nn.BatchNorm1d(self.filters),
-            nn.ReLU(),
+            # nn.ReLU(),
+            self.activation()
         )
 
     def forward(self, x):
