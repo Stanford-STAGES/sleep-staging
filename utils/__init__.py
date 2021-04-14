@@ -1,6 +1,12 @@
 from .arg_utils import get_args
 from .chunking import chunks
 from .dataset_utils import get_data
+from .edf_utils import (
+    load_edf_dhc,
+    load_edf_jcts,
+    load_edf_khc,
+    load_edf_wsc
+)
 from .evaluate_performance import (
     evaluate_performance,
     transition_matrix,
@@ -26,10 +32,18 @@ from .plotting import (
     plot_segment,
     view_record,
 )
+from .sta_utils import load_scored_data
 
 read_fns = {
     "cc": load_h5_data,
     "raw": load_psg_h5_data,
+}
+
+edf_read_fns = {
+    'dhc': load_edf_dhc,
+    'wsc': load_edf_wsc,
+    'khc': load_edf_khc,
+    'jcts': load_edf_jcts,
 }
 
 # __all__ = ["evaluate_performance", "load_h5_data", "ParallelExecutor", "read_fns", "get_args", "get_model"]
