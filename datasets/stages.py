@@ -15,6 +15,7 @@ try:
     from utils import get_h5_info
     from utils import ParallelExecutor
 except ImportError:
+    from utils.h5_utils import get_h5_info
     from utils.h5_utils import load_h5_data
     from utils.parallel_bar import ParallelExecutor
 

@@ -16,22 +16,6 @@ from tqdm import tqdm
 from utils import ParallelExecutor, load_h5_data, read_fns
 
 
-# def load_psg_h5_data(filename, scaling=None):
-#     scaler = None
-
-#     if scaling:
-#         scaler = SCALERS[scaling]()
-
-#     with File(filename, "r") as h5:
-#         N, C, T = h5["M"].shape
-#         sequences_in_file = N
-
-#         if scaling:
-#             scaler.fit(h5["M"][:].transpose(1, 0, 2).reshape((C, N * T)).T)
-
-#     return sequences_in_file, scaler
-
-
 class BaseCohortDataset(Dataset):
     def __init__(self, data_dir=None, n_jobs=None, scaling=None, n_records=None, psg_read_fn=None, cohort=None):
         assert data_dir and n_jobs and scaling and n_records and psg_read_fn, "Please supply input arguments!"
@@ -54,7 +38,8 @@ class BaseCohortDataset(Dataset):
         # Get information about the data
         print(f"Loading mmap data using {n_jobs} workers:")
         data = ParallelExecutor(n_jobs=n_jobs, prefer="threads")(total=len(self.records))(
-            delayed(get_data)(filename=os.path.join(self.data_dir, record), scaling=self.scaling) for record in self.records
+            delayed(get_data)(filename=os.path.join(self.data_dir, record), scaling=self.scaling)
+            for record in self.records
         )
         for record, (sequences_in_file, scaler) in zip(tqdm(self.records, desc="Processing"), data):
             self.record_indices[record] = np.arange(sequences_in_file)
