@@ -1,0 +1,72 @@
+{
+    "A1": [],
+    "A2": [],
+    "C3": [
+        "C3-A2"
+    ],
+    "C4": [
+        "C4-A1"
+    ],
+    "EMG": [
+        "Chin EMG",
+        "Chin-L",
+        "Chin-R"
+    ],
+    "EMGRef": [
+        "Chin-Ctr"
+    ],
+    "EOGL": [
+        "LOC-A2"
+    ],
+    "EOGR": [
+        "ROC-A1"
+    ],
+    "EOGRef": [],
+    "O1": [
+        "O1-x"
+    ],
+    "O2": [
+        "O2-x"
+    ],
+    "categories": [
+        "C3",
+        "C4",
+        "O1",
+        "O2",
+        "EOGL",
+        "EOGR",
+        "EMG",
+        "A1",
+        "A2",
+        "EOGRef",
+        "EMGRef"
+    ],
+    "edfFiles": [
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_2785_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_4395_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_1538_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_5938_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_12310_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_10695_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_4369_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_5469_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_8258_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_10068_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_6236_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_1994_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_1508_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_12345_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_7160_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_13775_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_12311_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_5966_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_9789_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_9784_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_1647_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_4629_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_3413_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_8717_1.EDF",
+        "/oak/stanford/groups/mignot/psg/SSC/NARCO/SSC_NARCO_1534_1.EDF"
+    ],
+    "pathname": "/oak/stanford/groups/mignot/psg/SSC/NARCO/"
+}

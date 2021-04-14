@@ -1,0 +1,61 @@
+{
+    "A1": [],
+    "A2": [],
+    "C3": [
+        "C3-x",
+        "C3"
+    ],
+    "C4": [
+        "C4-x",
+        "C4-A1",
+        "C4",
+        "C4-A2"
+    ],
+    "EMG": [
+        "Chin",
+        "Chin EMG"
+    ],
+    "EMGRef": [],
+    "EOGL": [
+        "LOC",
+        "LOC-A2",
+        "LOC-x"
+    ],
+    "EOGR": [
+        "ROC",
+        "ROC-A1",
+        "ROC-x"
+    ],
+    "EOGRef": [],
+    "O1": [
+        "O1-x",
+        "O1"
+    ],
+    "O2": [
+        "O2-x",
+        "O2"
+    ],
+    "categories": [
+        "C3",
+        "C4",
+        "O1",
+        "O2",
+        "EOGL",
+        "EOGR",
+        "EMG",
+        "A1",
+        "A2",
+        "EOGRef",
+        "EMGRef"
+    ],
+    "edfFiles": [
+        "/scratch/users/alexno/sleep-staging/data/jcts/edf/JAZZ15-013_408_001.EDF",
+        "/scratch/users/alexno/sleep-staging/data/jcts/edf/JAZZ15-087_401_001.EDF",
+        "/scratch/users/alexno/sleep-staging/data/jcts/edf/JAZZ15-050_403_001.EDF",
+        "/scratch/users/alexno/sleep-staging/data/jcts/edf/JAZZ15-006_400_001.EDF",
+        "/scratch/users/alexno/sleep-staging/data/jcts/edf/JAZZ15-087_407_001.EDF",
+        "/scratch/users/alexno/sleep-staging/data/jcts/edf/JAZZ15-053_419_001.EDF",
+        "/scratch/users/alexno/sleep-staging/data/jcts/edf/JAZZ15-013_406_001.EDF"
+    ],
+    "pathname": "/scratch/users/alexno/sleep-staging/data/jcts/"
+}
