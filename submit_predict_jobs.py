@@ -52,7 +52,14 @@ JOBS = [
     # ('pkw41', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/kw41/20201123_092604'),
     # ('patt15', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/att15/20201124_080608'),
     # ('patt30', 'python predict.py --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/att30/20201124_080609'),
-    ('pavg_kw21_rnn128', 'python predict.py --gpus 1 --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21_rnn128/20201209_025443/epoch=038-eval_loss=0.37.ckpt'),
+    # ('pavg_kw21_rnn128', 'python predict.py --gpus 1 --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21_rnn128/20201209_025443/epoch=038-eval_loss=0.37.ckpt'),
+    # ('spindles', 'python predict.py --gpus 1 --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21/20201126_043826/epoch=047-eval_loss=0.44.ckpt'),
+    # ('pred_avg_kw21_nomix', 'python predict.py --gpus 2 --distributed_backend ddp --accelerator ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21_nomix/20210329_081432/epoch=032-eval_loss=0.32.ckpt')
+    # ('pred_avg_kw21_nomix_noadj', 'python predict.py --gpus 2 --distributed_backend ddp --accelerator ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21_nomix_noadj/20210331_013355/epoch=069-eval_loss=0.47.ckpt')
+    ('pred_avg_kw21_noadj_nomix_dilat2', 'python predict.py --gpus 2 --distributed_backend ddp --accelerator ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21_noadj_nomix_dilat2/20210401_104300/epoch=080-eval_loss=0.46.ckpt'),
+    ('pred_avg_kw21_nomix_noadj_elu', 'python predict.py --gpus 2 --distributed_backend ddp --accelerator ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21_nomix_noadj_elu/20210402_081528/epoch=040-eval_loss=0.48.ckpt'),
+    ('pred_avg_kw21_nomix_noadj_leaky', 'python predict.py --gpus 2 --distributed_backend ddp --accelerator ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21_nomix_noadj_leaky/20210402_081528/epoch=038-eval_loss=0.48.ckpt'),
+    ('pred_avg_kw21_nomix_noadj_swish', 'python predict.py --gpus 2 --distributed_backend ddp --accelerator ddp --n_jobs -1 --n_workers 10 --resume_from_checkpoint experiments/massc/avg_kw21_nomix_noadj_swish/20210402_081528/epoch=038-eval_loss=0.47.ckpt'),
 ]
 # fmt: on
 
@@ -65,7 +72,7 @@ def submit_job(jobname, experiment):
 #SBATCH -p mignot,owners,gpu
 #SBATCH --time=2-00:00
 #SBATCH --cpus-per-task=10
-#SBATCH --gres gpu:1
+#SBATCH --gres gpu:2
 #SBATCH --output=/home/users/alexno/sleep-staging/logs/{0}.out
 #SBATCH --error=/home/users/alexno/sleep-staging/logs/{0}.err
 ##################################################

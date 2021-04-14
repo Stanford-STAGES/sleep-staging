@@ -102,8 +102,17 @@ JOBS = [
     # ('avg_kw3_bottleneck', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 3 --block_type bottleneck'),
     # ('avg_kw21_bottleneck', 'python train.py --model_type massc_average --max_epochs 100 --gpus 2 --distributed_backend ddp --n_jobs -1 --n_workers 10 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --block_type bottleneck'),
     # ('avg_kw21_rnn128', 'python train.py --model_type massc_average --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --n_rnn_units 128 --n_rnn_layers 1 --rnn_bidirectional'),
-    ('avg_kw3_rnn128', 'python train.py --model_type massc_average --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 3 --n_rnn_units 128 --n_rnn_layers 1 --rnn_bidirectional'),
-    ('avg_kw21_rnn128_cyclic', 'python train.py --model_type massc_average --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --kernel_size 21 --n_rnn_units 128 --n_rnn_layers 1 --rnn_bidirectional --lr_scheduler cycliclr --max_lr 2e-2 --step_size_up 16000 --base_lr 1e-4'),
+    # ('avg_kw3_rnn128', 'python train.py --model_type massc_average --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 3 --n_rnn_units 128 --n_rnn_layers 1 --rnn_bidirectional'),
+    # ('avg_kw21_rnn128_cyclic', 'python train.py --model_type massc_average --max_epochs 100 --gpus 4 --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/ssc_wsc/raw/5min --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --kernel_size 21 --n_rnn_units 128 --n_rnn_layers 1 --rnn_bidirectional --lr_scheduler cycliclr --max_lr 2e-2 --step_size_up 16000 --base_lr 1e-4'),
+    # ('phate', 'python visualization_phate.py'),
+    # ('utime', 'python train.py --model_type utime --max_epochs 100 --gpus 4 --distributed_backend ddp --adjustment 0 --batch_size 32 --n_jobs -1 --n_workers 20 --scaling robust --data_dir data/train/raw --dataset_type ssc-wsc')
+    # ('avg_kw21_nomix_balanced', 'python train.py --model_type massc_average --dataset_type ssc-wsc --max_epochs 100 --gpus 4 --accelerator ddp --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/train/raw --adjustment 15 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --name avg_kw21_nomix_balanced --balanced_sampling')
+    # ('avg_kw21_nomix_noadj', 'python train.py --model_type massc_average --dataset_type ssc-wsc --max_epochs 100 --gpus 4 --accelerator ddp --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/train/raw --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --name avg_kw21_nomix_noadj')
+    # ('avg_kw21_noadj_nomix_dilat2', 'python train.py --model_type massc_average --dataset_type ssc-wsc --max_epochs 100 --gpus 4 --accelerator ddp --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/train/raw --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --name avg_kw21_noadj_nomix_dilat2 --dilation 2')
+    # ('avg_kw21_nomix_noadj_swish', 'python train.py --model_type massc_average --dataset_type ssc-wsc --max_epochs 100 --gpus 4 --accelerator ddp --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/train/raw --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --name avg_kw21_nomix_noadj_swish --activation swish'),
+    # ('avg_kw21_nomix_noadj_elu', 'python train.py --model_type massc_average --dataset_type ssc-wsc --max_epochs 100 --gpus 4 --accelerator ddp --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/train/raw --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --name avg_kw21_nomix_noadj_elu --activation elu'),
+    # ('avg_kw21_nomix_noadj_leaky', 'python train.py --model_type massc_average --dataset_type ssc-wsc --max_epochs 100 --gpus 4 --accelerator ddp --distributed_backend ddp --n_jobs -1 --n_workers 20 --batch_size 32 --scaling robust --data_dir data/train/raw --adjustment 0 --optimizer adam --learning_rate 1e-5 --earlystopping_patience 25 --lr_reduce_patience 10 --kernel_size 21 --name avg_kw21_nomix_noadj_leaky --activation leaky'),
+    ('utime', 'python train.py --model_type utime --max_epochs 100 --gpus 4 --distributed_backend ddp --adjustment 0 --batch_size 32 --n_jobs -1 --n_workers 32 --scaling robust --data_dir data/train/raw --dataset_type ssc-wsc')
 ]
 # fmt: on
 
@@ -113,9 +122,9 @@ def submit_job(jobname, experiment):
     content = """#!/bin/bash
 #
 #SBATCH --job-name={0}
-#SBATCH -p mignot,owners,gpu
+#SBATCH -p owners,gpu
 #SBATCH --time=2-00:00
-#SBATCH --cpus-per-task=20
+#SBATCH --cpus-per-task=32
 #SBATCH --gpus 4
 #SBATCH --output=/home/users/alexno/sleep-staging/logs/{0}.out
 #SBATCH --error=/home/users/alexno/sleep-staging/logs/{0}.err
@@ -125,7 +134,7 @@ source $PI_HOME/miniconda3/bin/activate
 conda activate pt1.7
 cd $HOME/sleep-staging
 
-{1} --name {0}
+{1}
 """
     with tempfile.NamedTemporaryFile(delete=False) as j:
         j.write(content.format(jobname, experiment).encode())
