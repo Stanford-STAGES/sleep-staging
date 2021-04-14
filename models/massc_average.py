@@ -58,12 +58,12 @@ class MASSCAverage(ptl.LightningModule):
         self.example_input_array = torch.zeros(self.hparams.batch_size, self.hparams.n_channels, 5 * 60 * 128)
 
         # Create mixing block
-        if self.hparams.n_channels != 1:
-            self.mixing_block = nn.Sequential(OrderedDict([
-                ('mix_conv', nn.Conv1d(self.hparams.n_channels, self.hparams.n_channels, 1)),
-                ('mix_bn', nn.BatchNorm1d(self.hparams.n_channels)),
-                ('mix_relu', nn.ReLU()),
-            ]))
+        # if self.hparams.n_channels != 1:
+        #     self.mixing_block = nn.Sequential(OrderedDict([
+        #         ('mix_conv', nn.Conv1d(self.hparams.n_channels, self.hparams.n_channels, 1)),
+        #         ('mix_bn', nn.BatchNorm1d(self.hparams.n_channels)),
+        #         ('mix_relu', nn.ReLU()),
+        #     ]))
 
         # Create basic block structure
         if self.hparams.block_type == 'residual':
@@ -105,6 +105,8 @@ class MASSCAverage(ptl.LightningModule):
                         n_filters_in=self.hparams.n_channels if k == 0 else self.hparams.filter_base * 2 ** (k - 1),
                         n_filters=self.hparams.filter_base * 2 ** k,
                         kernel_size=self.hparams.kernel_size,
+                        dilation=self.hparams.dilation,
+                        activation=self.hparams.activation,
                         strided=True
                     ))
                 ])) for k in range(self.hparams.n_blocks)
@@ -160,7 +162,8 @@ class MASSCAverage(ptl.LightningModule):
             self.temporal_block.flatten_parameters()
 
         # Mixing block
-        z = self.mixing_block(x)
+        # z = self.mixing_block(x)
+        z = x
 
         # Feature extraction block
         for block in self.blocks:
@@ -190,9 +193,9 @@ class MASSCAverage(ptl.LightningModule):
         z_1 = self(x)
 
         # Return predicted logits
-        z_hires = (z_1.unfold(-1, 3, 3)
-                      .mean(dim=-1))
-        logits_1 = self.classification(z_hires)
+        # z_hires = (z_1.unfold(-1, 1, 1)
+        #               .mean(dim=-1))
+        logits_1 = self.classification(z_1)
 
         # Merge with average
         z = (z_1.unfold(-1, eval_frequency_sec, eval_frequency_sec)
@@ -227,7 +230,8 @@ class MASSCAverage(ptl.LightningModule):
 
     def shared_step(self, X, y, stable_sleep):
 
-        stable_sleep = stable_sleep[:, ::self.hparams.eval_frequency_sec]  # Implicitly assuming that stable_sleep is every second
+        if stable_sleep.shape[-1] == 300:
+            stable_sleep = stable_sleep[:, ::self.hparams.eval_frequency_sec]  # Implicitly assuming that stable_sleep is every second
         y = y[:, :, ::self.hparams.eval_frequency_sec]  # Implicitly assuming y is scored every sec.
 
         y_hat, _ = self.classify_segments(X)
@@ -330,7 +334,7 @@ class MASSCAverage(ptl.LightningModule):
 
     def test_step(self, batch, batch_index):
         X, y, current_record, current_sequence, stable_sleep = batch
-        stable_sleep = stable_sleep[:, ::self.hparams.eval_frequency_sec]  # Implicitly assuming that stable_sleep is every second
+        # stable_sleep = stable_sleep[:, ::self.hparams.eval_frequency_sec]  # Implicitly assuming that stable_sleep is every second
         y = y[:, :, ::self.hparams.eval_frequency_sec]  # Implicitly assuming y is scored every sec.
         # y_hat = self.forward(X)  # TODO: fix this to use classify segments fn
 
@@ -440,10 +444,10 @@ class MASSCAverage(ptl.LightningModule):
                 "stable_sleep": [],
                 "logits": [],
                 "seq_nr": [],
-                "y_hat_3s": [],
-                "y_hat_5s": [],
-                "y_hat_10s": [],
-                "y_hat_15s": [],
+                "yhat_3s": [],
+                "yhat_5s": [],
+                "yhat_10s": [],
+                "yhat_15s": [],
             } for r in all_records
         }
 
@@ -551,6 +555,8 @@ class MASSCAverage(ptl.LightningModule):
         architecture_group.add_argument("--eval_frequency_sec", default=30, type=int)
         architecture_group.add_argument("--n_attention_units", default=256, type=int)
         architecture_group.add_argument("--block_type", type=str, default='simple')
+        architecture_group.add_argument("--dilation", type=int, default=1)
+        architecture_group.add_argument("--activation", type=str, default='relu')
 
         # OPTIMIZER specific
         optimizer_group = parser.add_argument_group("optimizer")
