@@ -1,15 +1,13 @@
 from argparse import ArgumentParser
 
-import matplotlib.pyplot as plt
 import torch
+import torch.distributed as dist
 import torch.nn as nn
-import wandb
-#from pytorch_lightning import EvalResult, TrainResult
 from pytorch_lightning import LightningModule
-from pytorch_lightning.metrics import Accuracy
+from sklearn import metrics
+from tqdm import tqdm
 
 from losses import DiceLoss
-from utils.plotting import plot_segment
 
 
 class ConvBNReLU(nn.Module):
@@ -35,6 +33,8 @@ class ConvBNReLU(nn.Module):
             # nn.ELU(),
             nn.BatchNorm1d(self.out_channels),
         )
+        nn.init.xavier_uniform_(self.layers[1].weight)
+        nn.init.zeros_(self.layers[1].bias)
 
     def forward(self, x):
         return self.layers(x)
@@ -75,13 +75,30 @@ class Encoder(nn.Module):
 
         self.maxpools = nn.ModuleList([nn.MaxPool1d(self.maxpool_kernels[k]) for k in range(self.depth)])
 
+        self.bottom = nn.Sequential(
+            ConvBNReLU(
+                in_channels=self.filters[-1],
+                out_channels=self.filters[-1] * 2,
+                kernel_size=self.kernel_size,
+            ),
+            ConvBNReLU(
+                in_channels=self.filters[-1] * 2,
+                out_channels=self.filters[-1] * 2,
+                kernel_size=self.kernel_size
+            ),
+        )
+
     def forward(self, x):
         shortcuts = []
         for layer, maxpool in zip(self.blocks, self.maxpools):
-            x = layer(x)
-            shortcuts.append(x)
-            x = maxpool(x)
-        return x, shortcuts
+            z = layer(x)
+            shortcuts.append(z)
+            x = maxpool(z)
+
+        # Bottom part
+        encoded = self.bottom(x)
+
+        return encoded, shortcuts
 
 
 class Decoder(nn.Module):
@@ -121,10 +138,6 @@ class Decoder(nn.Module):
             ),
         ) for k in range(self.depth)])
         # fmt: off
-        self.dense = nn.Sequential(
-            nn.Conv1d(in_channels=self.filters[-1], out_channels=self.out_channels, kernel_size=1),
-            nn.Tanh()
-        )
 
     def forward(self, z, shortcuts):
 
@@ -133,7 +146,7 @@ class Decoder(nn.Module):
             z = torch.cat([shortcut, z], dim=1)
             z = block(z)
 
-        return self.dense(z)
+        return z
 
 
 class SegmentClassifier(nn.Module):
@@ -147,8 +160,10 @@ class SegmentClassifier(nn.Module):
             # nn.Flatten(start_dim=2),
             # nn.ConstantPad1d(padding=(self.padding, self.padding), value=0),
             nn.Conv1d(in_channels=self.num_classes, out_channels=self.num_classes, kernel_size=1),
-            nn.Softmax(dim=1),
+            # nn.Softmax(dim=1),
         )
+        nn.init.xavier_normal_(self.layers[0].weight)
+        nn.init.zeros_(self.layers[0].bias)
 
     def forward(self, x):
         # batch_size, num_classes, n_samples = x.shape
@@ -162,28 +177,35 @@ class UTimeModel(LightningModule):
     #     dilation=2, sampling_frequency=128, num_classes=5, epoch_length=30, lr=1e-4, batch_size=12,
     #     n_workers=0, eval_ratio=0.1, data_dir=None, n_jobs=-1, n_records=-1, scaling=None, **kwargs
     # ):
-    def __init__(self, hparams, *args, **kwargs):
+    # def __init__(self, hparams, *args, **kwargs):
+    def __init__(
+        self,
+        filters=None,
+        in_channels=None,
+        maxpool_kernels=None,
+        kernel_size=None,
+        dilation=None,
+        num_classes=None,
+        sampling_frequency=None,
+        epoch_length=None,
+        data_dir=None,
+        n_jobs=None,
+        n_records=None,
+        scaling=None,
+        lr=None,
+        n_segments=10,
+        *args,
+        **kwargs
+    ):
         super().__init__()
-        # self.save_hyperparameters(hparams)
-        self.save_hyperparameters({k: v for k, v in hparams.items() if not callable(v)})
+        self.save_hyperparameters()
+        # self.save_hyperparameters({k: v for k, v in hparams.items() if not callable(v)})
         self.encoder = Encoder(
             filters=self.hparams.filters,
             in_channels=self.hparams.in_channels,
             maxpool_kernels=self.hparams.maxpool_kernels,
             kernel_size=self.hparams.kernel_size,
             dilation=self.hparams.dilation,
-        )
-        self.bottom = nn.Sequential(
-            ConvBNReLU(
-                in_channels=self.hparams.filters[-1],
-                out_channels=self.hparams.filters[-1] * 2,
-                kernel_size=self.hparams.kernel_size,
-            ),
-            ConvBNReLU(
-                in_channels=self.hparams.filters[-1] * 2,
-                out_channels=self.hparams.filters[-1] * 2,
-                kernel_size=self.hparams.kernel_size
-            ),
         )
         self.decoder = Decoder(
             filters=self.hparams.filters[::-1],
@@ -196,10 +218,21 @@ class UTimeModel(LightningModule):
             num_classes=self.hparams.num_classes,
             epoch_length=self.hparams.epoch_length
         )
-        self.loss = DiceLoss(self.hparams.num_classes)
+        self.dense = nn.Sequential(
+            nn.Conv1d(in_channels=self.hparams.filters[0], out_channels=self.hparams.num_classes, kernel_size=1, bias=True),
+            nn.Tanh()
+        )
+        nn.init.xavier_normal_(self.dense[0].weight)
+        nn.init.zeros_(self.dense[0].bias)
+
+        # self.loss = DiceLoss(self.hparams.num_classes)
         # self.loss = nn.CrossEntropyLoss()
-        self.train_acc = Accuracy()
-        self.eval_acc = Accuracy()
+        try:
+            self.loss = nn.CrossEntropyLoss(weight=torch.Tensor(self.hparams.cb_weights), reduction='none')
+        except AttributeError:
+            self.loss = nn.CrossEntropyLoss()
+        # self.train_acc = Accuracy()
+        # self.eval_acc = Accuracy()
 #        self.metric = Accuracy(num_classes=self.hparams.num_classes, reduce_op='mean')
 
         # Create Dataset params
@@ -226,11 +259,11 @@ class UTimeModel(LightningModule):
         # Run through encoder
         z, shortcuts = self.encoder(x)
 
-        # Bottom section
-        z = self.bottom(z)
-
         # Run through decoder
         z = self.decoder(z, shortcuts)
+
+        # Run dense modeling
+        z = self.dense(z)
 
         return z
 
@@ -245,25 +278,33 @@ class UTimeModel(LightningModule):
              .mean(dim=-1)
         y = self.segment_classifier(z)
 
-        return y
+        return y, z
 
     def training_step(self, batch, batch_idx):
         # if batch_idx == 100:
         #     print('hej')
-        x, t, _, _, stable_sleep = batch
-        ss = stable_sleep[:, ::30]
+        x, t, r, seq, stable_sleep = batch
+        # ss = stable_sleep[:, ::30]
 
         # Classify segments
-        y = self.classify_segments(x)
+        y, _ = self.classify_segments(x)
 
         # loss = self.loss(y, t[:, :, ::self.hparams.epoch_length])
         loss = self.compute_loss(y, t, stable_sleep)
-        t = t[:, :, ::30]
-        self.train_acc(y.argmax(dim=1)[ss], t.argmax(dim=1)[ss])
+        # t = t[:, :, ::30]
+        # self.train_acc(y.argmax(dim=1)[ss], t.argmax(dim=1)[ss])
         # accuracy = self.metric(y.argmax(dim=1), t[:, :, ::self.hparams.epoch_length].argmax(dim=1))
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('train_acc', self.train_acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        # self.log('train_acc', self.train_acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
+        # return {
+        #     'loss': loss,
+        #     'predicted': y,
+        #     'true': t,
+        #     'record': r,
+        #     'sequence_nr': seq,
+        #     'stable_sleep': stable_sleep
+        # }
 #        result = TrainResult(minimize=loss)
 #        result.log('train_loss', loss, prog_bar=True, sync_dist=True)
 #        result.log('train_acc', accuracy, prog_bar=True, sync_dist=True)
@@ -271,137 +312,215 @@ class UTimeModel(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, t, r, seqs, stable_sleep = batch
-        ss = stable_sleep[:, ::30]
 
         # Classify segments
-        y = self.classify_segments(x)
+        y, z = self.classify_segments(x)
 
         # loss = self.loss(y, t[:, :, ::self.hparams.epoch_length])
         loss = self.compute_loss(y, t, stable_sleep)
         t = t[:, :, ::30]
-        self.eval_acc(y.argmax(dim=1)[ss], t.argmax(dim=1)[ss])
+        # self.eval_acc(y.argmax(dim=1)[ss], t.argmax(dim=1)[ss])
         # accuracy = self.metric(y.argmax(dim=1), t[:, :, ::self.hparams.epoch_length].argmax(dim=1))
-        self.log('eval_loss', loss, on_epoch=True, on_step=False, prog_bar=True, logger=True)
-        self.log('eval_acc', self.eval_acc, on_epoch=True, on_step=False, prog_bar=True, logger=True)
+        self.log('eval_loss', loss, on_epoch=True, on_step=False, prog_bar=True, logger=True, sync_dist=True)
 
-        # # Generate an image
-        # if batch_idx == 0:
-        #     fig = plot_segment(x, t, z)
-        #     self.logger.experiment[1].log({'Hypnodensity': wandb.Image(fig)})
-        #     plt.close(fig)
+        return {
+            "predicted": y.softmax(dim=1),
+            # "yhat_1s": z,
+            "true": t,
+            "record": r,
+            "sequence_nr": seqs,
+            "stable_sleep": stable_sleep,
+        }
 
-#        result = EvalResult(checkpoint_on=loss)
-#        result.log('eval_loss', loss, prog_bar=True, sync_dist=True)
-#        result.log('eval_acc', accuracy, prog_bar=True, sync_dist=True)
-#
-#        return result
+    def validation_epoch_end(self, outputs):
+
+        true = torch.cat([out['true'] for out in outputs], dim=0).permute([0, 2, 1])
+        predicted = torch.cat([out['predicted'] for out in outputs], dim=0).permute([0, 2, 1])
+        stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in outputs], dim=0)
+        sequence_nrs = torch.cat([out['sequence_nr'] for out in outputs], dim=0)
+
+        if self.use_ddp:
+            out_true = [torch.zeros_like(true) for _ in range(torch.distributed.get_world_size())]
+            out_predicted = [torch.zeros_like(predicted) for _ in range(torch.distributed.get_world_size())]
+            out_stable_sleep = [torch.zeros_like(stable_sleep) for _ in range(torch.distributed.get_world_size())]
+            out_seq_nrs = [torch.zeros_like(sequence_nrs) for _ in range(dist.get_world_size())]
+            dist.barrier()
+            dist.all_gather(out_true, true)
+            dist.all_gather(out_predicted, predicted)
+            dist.all_gather(out_stable_sleep, stable_sleep)
+            dist.all_gather(out_seq_nrs, sequence_nrs)
+            if dist.get_rank() == 0:
+                t = torch.stack(out_true).transpose(0, 1).reshape(-1, int(300/30), self.hparams.num_classes).cpu().numpy()
+                p = torch.stack(out_predicted).transpose(0, 1).reshape(-1, int(300/30), self.hparams.num_classes).cpu().numpy()
+                s = torch.stack(out_stable_sleep).transpose(0, 1).reshape(-1, int(300/30)).to(torch.bool).cpu().numpy()
+                u = t.sum(axis=-1) == 1
+
+                acc = metrics.accuracy_score(t[s & u].argmax(-1), p[s & u].argmax(-1))
+                cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
+                f1_macro = metrics.f1_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
+
+                self.log_dict({
+                    'eval_acc': acc,
+                    'eval_cohen': cohen,
+                    'eval_f1_macro': f1_macro,
+                }, on_step=False, prog_bar=True, logger=True, on_epoch=True)
+        elif self.on_gpu:
+            t = true.cpu().numpy()
+            p = predicted.cpu().numpy()
+            s = stable_sleep.to(torch.bool).cpu().numpy()
+            u = t.sum(axis=-1) == 1
+
+            acc = metrics.accuracy_score(t[s & u].argmax(-1), p[s & u].argmax(-1))
+            cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
+            f1_macro = metrics.f1_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
+
+            self.log_dict({
+                    'eval_acc': acc,
+                    'eval_cohen': cohen,
+                    'eval_f1_macro': f1_macro,
+            }, on_step=False, prog_bar=True, logger=True, on_epoch=True)
+        else:
+            t = true.numpy()
+            p = predicted.numpy()
+            s = stable_sleep.to(torch.bool).numpy()
+            u = t.sum(axis=-1) == 1
+
+            acc = metrics.accuracy_score(t[s & u].argmax(-1), p[s & u].argmax(-1))
+            cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
+            f1_macro = metrics.f1_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
+
+            self.log_dict({
+                    'eval_acc': acc,
+                    'eval_cohen': cohen,
+                    'eval_f1_macro': f1_macro,
+            }, on_step=False, prog_bar=True, logger=True, on_epoch=True)
 
     def test_step(self, batch, batch_index):
+        x, t, r, seqs, stable_sleep = batch
+        t = t[:, :, ::30]
 
-        X, y, current_record, current_sequence, stable_sleep = batch
-        y_hat = self.classify_segments(X)
-        # result = ptl.EvalResult()
-        # result.predicted = y_hat.softmax(dim=1)
-        # result.true = y
-        # result.record = current_record
-        # result.sequence_nr = current_sequence
-        # result.stable_sleep = stable_sleep
-        # return result
+        # Classify segments
+        yhat_30s, yhat_1s = self.classify_segments(x)
+
+        # Return predictions at other resolutions
+        yhat_3s, _ = self.classify_segments(x, resolution=3)
+
         return {
-            "predicted": y_hat.softmax(dim=1),
-            "true": y,
-            "record": current_record,
-            "sequence_nr": current_sequence,
+            "predicted": yhat_30s.softmax(dim=1),
+            "true": t,
+            "record": r,
+            "sequence_nr": seqs,
             "stable_sleep": stable_sleep,
+            "logits": yhat_1s.softmax(dim=1),
+            "y_hat_3s": yhat_3s.softmax(dim=1),
         }
 
     def test_epoch_end(self, output_results):
         """This method collects the results and sorts the predictions according to record and sequence nr."""
         try:
-            all_records = self.test_dataloader.dataloader.dataset.records # When running a new dataset
-        except AttributeError:
-            all_records = self.test_data.records # When running on the train data
-        results = {r: {
+            all_records = sorted(self.trainer.datamodule.test.records)
+        except AttributeError: # Catch exception if we've supplied dataloaders instead of DataModule
+            all_records = sorted(self.trainer.test_dataloaders[0].dataset.records)
+
+        true = torch.cat([out['true'] for out in output_results], dim=0).transpose(2, 1)
+        predicted = torch.cat([out['predicted'] for out in output_results], dim=0).permute([0, 2, 1])
+        stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in output_results], dim=0)
+        sequence_nrs = torch.cat([out['sequence_nr'] for out in output_results], dim=0)
+        logits = torch.cat([out['logits'] for out in output_results], dim=0).permute([0, 2, 1])
+        y_hat_3s = torch.cat([out['y_hat_3s'] for out in output_results], dim=0).permute([0, 2, 1])
+
+        if self.use_ddp:
+            record2int = {r: idx for idx, r in enumerate(all_records)}
+            int2record = {idx: r for idx, r in enumerate(all_records)}
+            records = torch.cat([torch.Tensor([record2int[r]]).type_as(stable_sleep) for out in output_results for r in out['record']], dim=0)
+            out_true = [torch.zeros_like(true) for _ in range(dist.get_world_size())]
+            out_predicted = [torch.zeros_like(predicted) for _ in range(dist.get_world_size())]
+            out_stable_sleep = [torch.zeros_like(stable_sleep) for _ in range(dist.get_world_size())]
+            out_seq_nrs = [torch.zeros_like(sequence_nrs) for _ in range(dist.get_world_size())]
+            out_records = [torch.zeros_like(records) for _ in range(dist.get_world_size())]
+            out_logits = [torch.zeros_like(logits) for _ in range(dist.get_world_size())]
+            out_y_hat_3s = [torch.zeros_like(y_hat_3s) for _ in range(dist.get_world_size())]
+
+            dist.barrier()
+            dist.all_gather(out_true, true)
+            dist.all_gather(out_predicted, predicted)
+            dist.all_gather(out_stable_sleep, stable_sleep)
+            dist.all_gather(out_seq_nrs, sequence_nrs)
+            dist.all_gather(out_records, records)
+            dist.all_gather(out_logits, logits)
+            dist.all_gather(out_y_hat_3s, y_hat_3s)
+
+            if dist.get_rank() == 0:
+                true = torch.cat(out_true)
+                predicted = torch.cat(out_predicted)
+                stable_sleep = torch.cat(out_stable_sleep)
+                sequence_nrs = torch.cat(out_seq_nrs)
+                records = [int2record[r.item()] for r in torch.cat(out_records)]
+                logits = torch.cat(out_logits)
+                y_hat_3s = torch.cat(out_y_hat_3s)
+
+            else:
+                return None
+        else:
+            records = [r for out in output_results for r in out['record']]
+
+        results = {
+            r: {
                 "true": [],
                 "true_label": [],
                 "predicted": [],
                 "predicted_label": [],
                 "stable_sleep": [],
-                # 'acc': None,
-                # 'f1': None,
-                # 'recall': None,
-                # 'precision': None,
+                "logits": [],
+                "seq_nr": [],
+                "yhat_3s": [],
             } for r in all_records
         }
 
-        for r in all_records:
-            if isinstance(output_results, dict):
-                current_record = {k: v for k, v in output_results.items() if k is not 'meta'}
-                current_record = [dict(zip(current_record, t)) for t in zip(*current_record.values())]
-                current_record = sorted([v for v in current_record if v["record"][0] == r], key=lambda x: x["sequence_nr"])
-            elif isinstance(output_results, list):
-            # current_record = {k: [record for record in records if ] for k, v in output_results.items() if k is not 'meta'}
-            # current_record = {k: v for k, v in current_record.items()}
-                current_record = sorted([v for v in output_results if v["record"][0] == r], key=lambda x: x["sequence_nr"])
-            if not current_record:
-                results.pop(r, None)
-                continue
-            y = torch.cat([v["predicted"] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.hparams.num_classes, -1)
-            try:
-                t = torch.cat([v["true"] for v in current_record], dim=0).permute(1, 0, 2).reshape(self.hparams.num_classes, -1)
-            except RuntimeError as e:
-                raise RuntimeError(f'Current record: {current_record[0]["record"][0]}, {e}')
-            stable_sleep = torch.cat([v["stable_sleep"] for v in current_record], dim=0).flatten()
-            # y_label = y.argmax(dim=0)
-            # t_label = t.argmax(dim=0)
-            # cm = ptl.metrics.ConfusionMatrix()(y_label, t_label)
-            # acc = ptl.metrics.Accuracy()(y_label, t_label)
-            # f1 = ptl.metrics.F1(reduction='none')(y_label, t_label)
-            # precision = ptl.metrics.Precision(reduction='none')(y_label, t_label)
-            # recall = ptl.metrics.Recall(reduction='none')(y_label, t_label)
-            results[r]["true"] = t.cpu().numpy()
-            # results[r]["true_label"] = t_label.cpu().numpy()
-            results[r]["predicted"] = y.cpu().numpy()
-            results[r]['stable_sleep'] = stable_sleep.cpu().numpy()
-            # results[r]["predicted_label"] = y_label.cpu().numpy()
-            # results[r]['acc'] = acc.cpu().numpy()
-            # results[r]['cm'] = cm.cpu().numpy()
-            # results[r]['f1'] = f1.cpu().numpy()
-            # results[r]['precision'] = precision.cpu().numpy()
-            # results[r]['recall'] = recall.cpu().numpy()
+        for r in tqdm(all_records, desc='Sorting predictions...'):
+            record_idx = [idx for idx, rec in enumerate(records) if r == rec]
+            current_t = true[record_idx].reshape(-1, *true.shape[2:])
+            current_p = predicted[record_idx].reshape(-1, predicted.shape[-1])
+            current_ss = stable_sleep[record_idx].reshape(-1).to(torch.bool)
+            current_l = logits[record_idx].reshape(-1, logits.shape[-1])
+            current_seq = sequence_nrs[record_idx]
+            current_3s = y_hat_3s[record_idx].reshape(-1, y_hat_3s.shape[-1])
 
-            # results_dir = os.path.dirname(self.hparams.resume_from_checkpoint)
-            # with open(os.path.join(results_dir, f"{_name}_predictions.pkl"), "wb") as pkl:
-            #     pickle.dump(predictions, pkl)
+            results[r]['true'] = current_t.cpu().numpy()
+            results[r]['predicted'] = current_p.cpu().numpy()
+            results[r]['stable_sleep'] = current_ss.cpu().numpy()
+            results[r]['logits'] = current_l.cpu().numpy()
+            results[r]['seq_nr'] = current_seq.cpu().numpy()
+            results[r]['yhat_3s'] = current_3s.cpu().numpy()
 
-            # df_results = evaluate_performance(predictions)
-            # df_results.to_csv(os.path.join(results_dir, f"{_name}_results.csv"))
-        # output_results.results = results
-
-        # return output_results
         return results
 
     def compute_loss(self, y_pred, y_true, stable_sleep):
-        stable_sleep = stable_sleep[:, ::self.hparams.epoch_length]
+        stable_sleep = stable_sleep[:, ::self.hparams.epoch_length].squeeze()
         y_true = y_true[:, :, ::self.hparams.epoch_length]
 
-        if y_pred.shape[-1] != self.hparams.num_classes:
-            y_pred = y_pred.permute(dims=[0, 2, 1])
-        if y_true.shape[-1] != self.hparams.num_classes:
-            y_true = y_true.permute(dims=[0, 2, 1])
+        # if y_pred.shape[-1] != self.hparams.num_classes:
+        #     y_pred = y_pred.permute(dims=[0, 2, 1])
+        # if y_true.shape[-1] != self.hparams.num_classes:
+        #     y_true = y_true.permute(dims=[0, 2, 1])
         # return self.loss(y_pred, y_true.argmax(dim=-1))
 
-        return self.loss(y_pred, y_true, stable_sleep)
+        # return self.loss(y_pred, y_true, stable_sleep)
+        loss = self.loss(y_pred[stable_sleep], y_true.argmax(dim=1)[stable_sleep])
+        N, L = loss.shape
+        return (loss.sum(axis=-1) / L).sum() / N
 
     def configure_optimizers(self):
-        return torch.optim.Adam([
-            {'params': list(self.encoder.parameters())},
-            {'params': list(self.bottom.parameters())},
-            {'params': list(self.decoder.parameters())},
-            # {'params': [p[1] for p in self.named_parameters() if 'bias' not in p[0] and 'batch_norm' not in p[0]]},
-            {'params': list(self.segment_classifier.parameters())[0], 'weight_decay': 1e-5},
-            {'params': list(self.segment_classifier.parameters())[1]},
-        ], **self.optimizer_params
+        return torch.optim.Adam(
+            # [
+            #     {'params': list(self.encoder.parameters())},
+            #     # {'params': list(self.bottom.parameters())},
+            #     {'params': list(self.decoder.parameters())},
+            #     # {'params': [p[1] for p in self.named_parameters() if 'bias' not in p[0] and 'batch_norm' not in p[0]]},
+            #     {'params': list(self.segment_classifier.parameters())[0], 'weight_decay': 1e-5},
+            #     {'params': list(self.segment_classifier.parameters())[1]},
+            # ],
+            self.parameters(), **self.optimizer_params
         )
 
     # def on_after_backward(self):
@@ -470,6 +589,8 @@ class UTimeModel(LightningModule):
 
 if __name__ == "__main__":
 
+    from pytorch_lightning.core.memory import ModelSummary
+
     parser = ArgumentParser(add_help=False)
     parser = UTimeModel.add_model_specific_args(parser)
     args = parser.parse_args()
@@ -506,11 +627,14 @@ if __name__ == "__main__":
     # Test UTimeModel Class
     # utime = UTimeModel(in_channels=in_channels)
     utime = UTimeModel(**vars(args))
+    utime.example_input_array = torch.zeros(x_shape)
     utime.configure_optimizers()
+    model_summary = ModelSummary(utime, "top")
+    print(model_summary)
     print(utime)
     print(x.shape)
     # z = utime(x)
-    z = utime.classify_segments(x)
+    z, z_1 = utime.classify_segments(x)
     print(z.shape)
     print("x.shape:", x.shape)
     print("z.shape:", z.shape)
