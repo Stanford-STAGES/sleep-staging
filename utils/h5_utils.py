@@ -165,7 +165,26 @@ def initialize_record(filename, scaling=None, overlap=True, adjustment=30, seque
     unknown_stage = get_unknown_stage(hypnogram)
     stable_sleep[unknown_stage] = False
 
-    return sequences_in_file, scaler, stable_sleep
+    # Get bin counts
+    if overlap:
+        # hyp = h5["L"][::2].argmax(axis=1)[~get_unknown_stage(h5["L"][::2])][::30]
+        hyp = hyp_even.argmax(axis=1)[~unknown_stage[::2] & stable_sleep[::2]]
+    else:
+        # hyp = h5["L"][:].argmax(axis=1)[~get_unknown_stage(h5["L"][:])][::30]
+        hyp = hypnogram.argmax(axis=1)[~unknown_stage & stable_sleep]
+    bin_counts = np.bincount(hyp, minlength=C)
+
+    hypnogram = hypnogram.argmax(1)
+    # select_sequences = np.where(stable_sleep.squeeze().any(axis=1))[0]
+    # class_indices = get_class_sequence_idx(hypnogram, select_sequences)
+
+    if isinstance(sequence_length, str) and sequence_length == "full":
+        shape = hypnogram.shape
+        hypnogram = (hypnogram.transpose(2, 0, 1).reshape(shape[2], -1).T)[np.newaxis]
+        stable_sleep = (stable_sleep.transpose(2, 0, 1).reshape(shape[2], -1).T)[np.newaxis]
+        sequences_in_file = hypnogram.shape[0]
+
+    return hypnogram, sequences_in_file, scaler, stable_sleep, bin_counts
 
 
 def get_stable_sleep_periods(hypnogram, adjustment=30):
