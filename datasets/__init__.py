@@ -1,3 +1,4 @@
+from .base_datamodule import BaseDataModule
 from .isrc import ISRCDataModule
 from .khc import KHCDataModule
 from .ssc_wsc_psg import SscWscDataModule
@@ -9,5 +10,6 @@ available_datamodules = {
     "khc": KHCDataModule,
     "massc_average": SscWscDataModule,
     "isrc": ISRCDataModule,
+    "base": BaseDataModule
 }
 # __all__ = ["ISRCDataset", "KoreanDataset", "SscWscPsgDataset"]
