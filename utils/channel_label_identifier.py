@@ -25,7 +25,10 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-import mne
+try:
+    import mne
+except:
+    from pyedflib import EdfReader
 from tqdm import tqdm
 
 # from pyedflib import EdfReader
@@ -57,10 +60,12 @@ def getEDFFiles(path2check):
 def getSignalHeaders(edfFilename):
     try:
         # print("Reading headers from ", edfFilename)
-        # edfR = EdfReader(str(edfFilename))
-        # return edfR.getSignalHeaders()
-        edfR = mne.io.read_raw_edf(str(edfFilename), verbose=False)
-        return edfR.ch_names
+        try:
+            edfR = EdfReader(str(edfFilename))
+            return edfR.getSignalHeaders()
+        except:
+            edfR = mne.io.read_raw_edf(str(edfFilename), verbose=False)
+            return edfR.ch_names
     except:
         print("Could not read headers from {}".format(edfFilename))
         return []
@@ -68,8 +73,10 @@ def getSignalHeaders(edfFilename):
 
 def getChannelLabels(edfFilename):
     channelHeaders = getSignalHeaders(edfFilename)
-    # return [fields["label"] for fields in channelHeaders]
-    return channelHeaders
+    try:
+        return [fields["label"] for fields in channelHeaders]
+    except:
+        return channelHeaders
 
 
 def displaySetSelection(label_set):
