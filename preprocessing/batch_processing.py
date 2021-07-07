@@ -14,15 +14,18 @@ import pandas as pd
 from h5py import File
 from tqdm import tqdm
 
-from errors import MissingHypnogramError
-from errors import MissingSignalsError
-from errors import ReferencingError
-from process_data import process_single_file
+from utils.errors import MissingHypnogramError
+from utils.errors import MissingSignalsError
+from utils.errors import ReferencingError
+from preprocessing import process_single_file
 
 # from utils import chunks
 
-df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
-df['ID_Ling'] = df['ID-ling']
+try:
+    df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
+except:
+    df = pd.read_csv("data_master.csv")
+df["ID_Ling"] = df["ID-ling"]
 logging.basicConfig(format="%(asctime)s %(levelname)s | %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 logger = logging.getLogger()
 
@@ -76,20 +79,22 @@ def batch_start_jobs(args):
     missing_hyp = []
     missing_sigs = []
     for current_file in tqdm(listF):
-        if cohort == 'ihc':
-            current_fid = os.path.basename(current_file).split('.')[0][:5]
-            id_col = 'ID_Ling'
+        if cohort == "ihc":
+            current_fid = os.path.basename(current_file).split(".")[0][:5]
+            id_col = "ID_Ling"
         else:
             current_fid = os.path.basename(current_file).split(".")[0]
-            id_col = 'ID'
+            id_col = "FileID"
         # Some of the KHC ID's have a prepended 0, this removes it
-        if (cohort == 'khc') and (df[df[id_col] == current_fid].empty and not df[df[id_col] == current_fid.lstrip("0")].empty):
+        if (cohort == "khc") and (
+            df[df[id_col] == current_fid].empty and not df[df[id_col] == current_fid.lstrip("0")].empty
+        ):
             current_fid = current_fid.lstrip("0")
         # The subject is not in the overview file
         if df[df[id_col] == current_fid].empty:
             not_listed.append(current_file)
         elif (df[df[id_col] == current_fid]["Sleep scoring training data"] == 1).bool():
-        # elif (not (df.query(f'ID == "{current_fid}"')["Sleep scoring training data"] == 1).bool()) or (df.query(f'ID_Ling == "{current_fid}"')["Sleep scoring training data"] == 1).bool():
+            # elif (not (df.query(f'ID == "{current_fid}"')["Sleep scoring training data"] == 1).bool()) or (df.query(f'ID_Ling == "{current_fid}"')["Sleep scoring training data"] == 1).bool():
             listed_as_train.append(current_file)
         # elif (df.query(f'ID == "{current_fid}"')["Sleep scoring test data"] == 1).bool() or (df.query()).bool():
         #     listed_as_test.append(current_file)
@@ -99,7 +104,7 @@ def batch_start_jobs(args):
             # something_wrong.append(current_file)
     original_list = listF
     if args.test:
-        if cohort in ['ihc', 'dhc']:  # IHC data should only be placed in test
+        if cohort in ["ihc", "dhc", "ahc"]:  # IHC data should only be placed in test
             listF = listed_as_test + not_listed
         else:
             if listed_as_test:
@@ -146,7 +151,7 @@ source $PI_HOME/miniconda3/bin/activate
 conda activate pt1.7
 cd $HOME/sleep-staging
 
-python -c 'from batch_processing import batch_chunk_wrapper; batch_chunk_wrapper({fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}", "{log_filename}", "{cohort}")'
+python -c 'from preprocessing.batch_processing import batch_chunk_wrapper; batch_chunk_wrapper({fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}", "{log_filename}", "{cohort}")'
 """
             with tempfile.NamedTemporaryFile(delete=False) as j:
                 j.write(content.encode())
@@ -188,7 +193,9 @@ def batch_chunk_wrapper(fs, seq_len, overlap, subset, encoding_type, out_dir, lo
     with open(log_filename + "_files.txt", "r") as f:
         filelist = [filename.rstrip() for filename in f.readlines()]
 
-    for idx,fname in enumerate(tqdm(filelist)):
+    for idx, fname in enumerate(tqdm(filelist)):
+        # if fname != "data/khc/edf/12590305.edf":
+        #     continue
         try:
             M, L, W, Z, _, _ = process_single_file(fname, fs, seq_len, overlap, cohort, encoding=encoding_type)
         except (MissingHypnogramError, MissingSignalsError, ReferencingError) as err:
@@ -563,14 +570,7 @@ def batch_mix_encodings(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--data_dir",
-        type=str,
-        default="/oak/stanford/groups/mignot/psg/SSC/APOE,/oak/stanford/groups/mignot/psg/WSC_EDF/",
-    )
-    # parser.add_argument("--data_dir", type=str, default='/oak/stanford/groups/mignot/psg/SSC/APOE')
-    # parser.add_argument("--data_dir", type=str, default='/oak/stanford/groups/mignot/psg/WSC_EDF/')
-    # parser.add_argument("--data_dir", type=str, default="/oak/stanford/groups/mignot/psg/Korea (KHC)/SOMNO")
+    parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--out_dir", type=str, default=None)
     parser.add_argument("--cohort", type=str, default="")
     parser.add_argument("--fs", type=int, default=100)
@@ -582,98 +582,11 @@ if __name__ == "__main__":
     parser.add_argument("--test", action="store_true")
     parser.add_argument("--slice", type=lambda s: slice(*[int(e) if e.strip() else None for e in s.split(":")]))
     args = parser.parse_args()
-    # pprint.pprint(args)
     print(json.dumps(vars(args), sort_keys=True, indent=4))
     if args.mix:
         args.encoding_dir = args.data_dir
         args.save_dir = args.out_dir
-        # args.encoding_dir = "./data/individual_encodings"
-        # args.save_dir = "./data/batch_encodings"
         batch_mix_encodings(args)
     else:
-        # batch_chunk_wrapper(
-        #     128,
-        #     10,
-        #     0,
-        #     "test",
-        #     "raw",
-        #     "data/dhc/raw",
-        #     "logs/preprocessing/dhc/raw/datasplit_0",
-        #     'dhc'
-        # )
-        # batch_chunk_wrapper(
-        #     128,
-        #     10,
-        #     0,
-        #     "test",
-        #     "raw",
-        #     "/oak/stanford/groups/mignot/alexno/sleep-staging/data/test/raw",
-        #     "logs/preprocessing/ssc_wsc/raw/datasplit_0",
-        # )
-        # batch_chunk_wrapper(
-        #     100, 1200, 400, "train", "cc", "/oak/stanford/groups/mignot/alexno/data/sleep-staging/ssc_wsc/cc/5min/single", "logs/preprocessing/cc/datasplit_7",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 0, "test", "raw", "data/isrc/raw/5min/", "logs/preprocessing/isrc/raw/datasplit_0",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 0, "test", "raw", "data/khc/raw/5min/", "logs/preprocessing/khc/raw/datasplit_0",
-        # )
-        # batch_chunk_wrapper(
-        #     100,
-        #     1200,
-        #     400,
-        #     "train",
-        #     "cc",
-        #     "/oak/stanford/groups/mignot/alexno/data/sleep-staging/ssc_wsc/cc/5min/single",
-        #     "logs/preprocessing/cc/datasplit_0",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_0",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_1",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_2",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 0, "test", "raw", "data/ssc_wsc/raw/5min/test", "logs/preprocessing/datasplit_3",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_0",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_1",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_2",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_3",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_48",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_49",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_50",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_59",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_60",
-        # )
-        # batch_chunk_wrapper(
-        #     128, 10, 5, "train", "raw", "data/ssc_wsc/raw/5min/train", "logs/preprocessing/datasplit_63",
-        # )
+        # batch_chunk_wrapper(128, 10, 0, "test", "raw", "data/ahc/raw", "logs/preprocessing/ahc/raw/datasplit_0", "ahc")
         batch_start_jobs(args)
-        # batch_process_and_save("/oak/stanford/groups/mignot/psg/ISRC/AL_36_112108.edf", 100, 1200, 0, "test", "cc")
-        # batch_process_and_save("/oak/stanford/groups/mignot/psg/SSC/APOE/SSC_1958_1.EDF", 128, 10, 0, "test", "raw")
-        # batch_process_and_save(
-        #     "/oak/stanford/groups/mignot/psg/WSC_EDF/A0031_4 171046.EDF", 128, 10, 5, "train", "raw", "data/full_length/ssc_wsc/raw/train"
-        # )
-    # batch_process_and_save_encoding('/oak/stanford/groups/mignot/psg/SSC/APOE/SSC_1558_1.EDF', 100, 1200, 400)

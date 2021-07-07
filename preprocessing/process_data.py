@@ -39,12 +39,14 @@ from tqdm import tqdm
 # from pyfftw.interfaces.scipy_fft import fftshift
 # from pyfftw.interfaces.scipy_fft import ifft
 # from pyfftw.interfaces.scipy_fft import irfft
-from errors import MissingHypnogramError
-from errors import MissingSignalsError
-from errors import ReferencingError
+
 from utils import edf_read_fns
 from utils import load_scored_data
+from utils.errors import MissingHypnogramError
+from utils.errors import MissingSignalsError
+from utils.errors import ReferencingError
 
+os.chdir("/home/users/alexno/sleep-staging")
 nthread = multiprocessing.cpu_count()
 
 # random.seed(1337)
@@ -79,9 +81,12 @@ cc_overlap = 0.25
 #     64: {'up': 25, 'down': 16, 'numerator': [-0.0320893507939845, -0.0344139808620806, -0.0362877971368454, -0.0376420994987445, -0.0384136008594217, -0.0385459881687820, -0.0379914348015759, -0.0367120329513975, -0.0346811148078800, -0.0318844320359302, -0.0283211644203699, -0.0240047304804672, -0.0189633753803122, -0.0132405145352462, -0.00689481490285626, 0, 0.00735563085459690, 0.0150699737780891, 0.0230281816934504, 0.0311040102536598, 0.0391614374261428, 0.0470565405346993, 0.0546396093506209, 0.0617574688192032, 0.0682559802981444, 0.0739826858634525, 0.0787895563949266, 0.0825358008693668, 0.0850906916397958, 0.0863363585281994, 0.0861705033618723, 0.0845089861816643, 0.0812882347735018, 0.0764674304379452, 0.0700304250172251, 0.0619873471314706, 0.0523758593071541, 0.0412620321679860, 0.0287408070443068, 0.0149360241707093, 0, -0.0158873560297387, -0.0325198877835292, -0.0496669968935155, -0.0670758930155576, -0.0844742700003676, -0.101573380739946, -0.118071476348402, -0.133657568617852, -0.148015468474627, -0.160828047561907, -0.171781665197169, -0.180570698891262, -0.186902113453400, -0.190500001511837, -0.191110027107665, -0.188503703906869, -0.182482440544383, -0.172881287666473, -0.159572324359673, -0.142467625812865, -0.121521759203632, -0.0967337608632991, -0.0681485546737065, -0.0358577792844161, 0, 0.0392397100499735, 0.0816308257137906, 0.126899059488686, 0.174728672513159, 0.224765384957634, 0.276619854730678, 0.329871684621280, 0.384073909707119, 0.438757909210108, 0.493438680100573, 0.547620403755472, 0.600802231965954, 0.652484214652076, 0.702173288847600, 0.749389246917535, 0.793670601598622, 0.834580266321688, 0.871710971378531, 0.904690339808223, 0.933185551352875, 0.956907528406173, 0.975614584466860, 0.989115483114800, 0.997271863835223, 1, 0.997271863835223, 0.989115483114800, 0.975614584466860, 0.956907528406173, 0.933185551352875, 0.904690339808223, 0.871710971378531, 0.834580266321688, 0.793670601598622, 0.749389246917535, 0.702173288847600, 0.652484214652076, 0.600802231965954, 0.547620403755472, 0.493438680100573, 0.438757909210108, 0.384073909707119, 0.329871684621280, 0.276619854730678, 0.224765384957634, 0.174728672513159, 0.126899059488686, 0.0816308257137906, 0.0392397100499735, 0, -0.0358577792844161, -0.0681485546737065, -0.0967337608632991, -0.121521759203632, -0.142467625812865, -0.159572324359673, -0.172881287666473, -0.182482440544383, -0.188503703906869, -0.191110027107665, -0.190500001511837, -0.186902113453400, -0.180570698891262, -0.171781665197169, -0.160828047561907, -0.148015468474627, -0.133657568617852, -0.118071476348402, -0.101573380739946, -0.0844742700003676, -0.0670758930155576, -0.0496669968935155, -0.0325198877835292, -0.0158873560297387, 0, 0.0149360241707093, 0.0287408070443068, 0.0412620321679860, 0.0523758593071541, 0.0619873471314706, 0.0700304250172251, 0.0764674304379452, 0.0812882347735018, 0.0845089861816643, 0.0861705033618723, 0.0863363585281994, 0.0850906916397958, 0.0825358008693668, 0.0787895563949266, 0.0739826858634525, 0.0682559802981444, 0.0617574688192032, 0.0546396093506209, 0.0470565405346993, 0.0391614374261428, 0.0311040102536598, 0.0230281816934504, 0.0150699737780891, 0.00735563085459690, 0, -0.00689481490285626, -0.0132405145352462, -0.0189633753803122, -0.0240047304804672, -0.0283211644203699, -0.0318844320359302, -0.0346811148078800, -0.0367120329513975, -0.0379914348015759, -0.0385459881687820, -0.0384136008594217, -0.0376420994987445, -0.0362877971368454, -0.0344139808620806, -0.0320893507939845]},
 # }
 
-df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
+try:
+    df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
+except:
+    df = pd.read_csv("data_master.csv")
 
-noiseM = sio.loadmat("./noiseM.mat", squeeze_me=True, mat_dtype=False)["noiseM"]
+noiseM = sio.loadmat("preprocessing/noiseM.mat", squeeze_me=True, mat_dtype=False)["noiseM"]
 meanV = noiseM["meanV"].item()
 covM = noiseM["covM"].item()
 
@@ -100,14 +105,17 @@ def get_quiet_channel(channels, fs, meanV, covM):
 
 
 def channel_noise_level(channel, fs, meanV, covM):
-    hjorth = extract_hjorth(channel, fs)
-    noise_vec = np.zeros(hjorth.shape[1])
-    for k in range(len(noise_vec)):
-        M = hjorth[:, k][:, np.newaxis]
-        x = M - meanV[:, np.newaxis]
-        sigma = np.linalg.inv(covM)
-        noise_vec[k] = np.sqrt(np.dot(np.dot(np.transpose(x), sigma), x))
-    return np.mean(noise_vec)
+    if isinstance(channel, np.ndarray):
+        hjorth = extract_hjorth(channel, fs)
+        noise_vec = np.zeros(hjorth.shape[1])
+        for k in range(len(noise_vec)):
+            M = hjorth[:, k][:, np.newaxis]
+            x = M - meanV[:, np.newaxis]
+            sigma = np.linalg.inv(covM)
+            noise_vec[k] = np.sqrt(np.dot(np.dot(np.transpose(x), sigma), x))
+        return np.mean(noise_vec)
+    else:
+        return np.inf
 
 def get_alternative_names(ch, labels):
 
@@ -344,18 +352,20 @@ def load_signals(edf_file, fs, cohort, encoding):
         # Resample data using polyphase filtering
         data = [[]] * temp_data.shape[0] if not isinstance(temp_data, list) else [[]] * len(temp_data)
         for idx, orig_fs in enumerate(cFs):
-            if orig_fs != fs:
-                data[idx] = signal.resample_poly(temp_data[idx], fs, orig_fs)
-            else:
-                data[idx] = temp_data[idx]
+            if isinstance(temp_data[idx], np.ndarray):
+                if orig_fs != fs:
+                    data[idx] = signal.resample_poly(temp_data[idx], fs, orig_fs)
+                else:
+                    data[idx] = temp_data[idx]
 
     # Trim
     for idx in range(len(data)):
         # 30 represents the epoch length most often used in standard hypnogram scoring.
-        rem = len(data[idx]) % (fs * 30)
-        # Otherwise, if rem == 0, the following results in an empty array
-        if rem > 0:
-            data[idx] = data[idx][:-rem]
+        if isinstance(data[idx], np.ndarray):
+            rem = len(data[idx]) % (fs * 30)
+            # Otherwise, if rem == 0, the following results in an empty array
+            if rem > 0:
+                data[idx] = data[idx][:-rem]
 
     # Select channels based on noise levels
     central_list = [0, 1]
@@ -575,11 +585,10 @@ def load_signals(edf_file, fs, cohort, encoding):
 
 
 def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc"):
-
     missing_hyp = []
     missing_sigs = []
 
-    hyp = load_scored_data(current_file.split(".")[0] + ".STA", cohort=cohort)
+    hyp = load_scored_data(current_file.split(".")[0], cohort=cohort)
     if hyp is None:
         raise MissingHypnogramError(os.path.basename(current_file))
         # return None, None, None, 1, None
