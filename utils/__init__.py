@@ -16,6 +16,7 @@ from .h5_utils import (
     load_h5_data,
     load_psg_h5_data,
     initialize_record,
+    get_class_sequence_idx,
     get_stable_sleep_periods,
     get_stable_stage,
     get_unknown_stage,

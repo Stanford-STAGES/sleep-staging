@@ -8,6 +8,17 @@ from sklearn import preprocessing
 SCALERS = {"robust": preprocessing.RobustScaler, "standard": preprocessing.StandardScaler}
 
 
+def get_class_sequence_idx(hypnogram, selected_sequences):
+    d = {
+        "w": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 0).any() and idx in selected_sequences],
+        "n1": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 1).any() and idx in selected_sequences],
+        "n2": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 2).any() and idx in selected_sequences],
+        "n3": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 3).any() and idx in selected_sequences],
+        "r": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 4).any() and idx in selected_sequences],
+    }
+    return d
+
+
 def get_h5_info(filename):
 
     try:
