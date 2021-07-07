@@ -57,13 +57,19 @@ class MASSCAverage(ptl.LightningModule):
         self.save_hyperparameters()
         self.example_input_array = torch.zeros(self.hparams.batch_size, self.hparams.n_channels, 5 * 60 * 128)
 
+        # HACK
+        if not hasattr(self.hparams, 'dilation'):
+            self.hparams.dilation = 1
+        if not hasattr(self.hparams, 'activation'):
+            self.hparams.activation = 'relu'
+
         # Create mixing block
-        # if self.hparams.n_channels != 1:
-        #     self.mixing_block = nn.Sequential(OrderedDict([
-        #         ('mix_conv', nn.Conv1d(self.hparams.n_channels, self.hparams.n_channels, 1)),
-        #         ('mix_bn', nn.BatchNorm1d(self.hparams.n_channels)),
-        #         ('mix_relu', nn.ReLU()),
-        #     ]))
+        if self.hparams.n_channels != 1:
+            self.mixing_block = nn.Sequential(OrderedDict([
+                ('mix_conv', nn.Conv1d(self.hparams.n_channels, self.hparams.n_channels, 1)),
+                ('mix_bn', nn.BatchNorm1d(self.hparams.n_channels)),
+                ('mix_relu', nn.ReLU()),
+            ]))
 
         # Create basic block structure
         if self.hparams.block_type == 'residual':
@@ -162,8 +168,8 @@ class MASSCAverage(ptl.LightningModule):
             self.temporal_block.flatten_parameters()
 
         # Mixing block
-        # z = self.mixing_block(x)
-        z = x
+        z = self.mixing_block(x)
+        # z = x
 
         # Feature extraction block
         for block in self.blocks:
@@ -321,7 +327,6 @@ class MASSCAverage(ptl.LightningModule):
             s = stable_sleep.to(torch.bool).numpy()
             u = t.sum(axis=-1) == 1
 
-
             acc = metrics.accuracy_score(t[s & u].argmax(-1), p[s & u].argmax(-1))
             cohen = metrics.cohen_kappa_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4])
             f1_macro = metrics.f1_score(t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average='macro')
@@ -345,6 +350,16 @@ class MASSCAverage(ptl.LightningModule):
         y_hat_5s, _ = self.classify_segments(X, eval_frequency_sec=5)
         y_hat_10s, _ = self.classify_segments(X, eval_frequency_sec=10)
         y_hat_15s, _ = self.classify_segments(X, eval_frequency_sec=15)
+        y_hat_60s, _ = self.classify_segments(X, eval_frequency_sec=60)
+        y_hat_150s, _ = self.classify_segments(X, eval_frequency_sec=150)
+        y_hat_300s, _ = self.classify_segments(X, eval_frequency_sec=300)
+        y_hat_600s, _ = self.classify_segments(X, eval_frequency_sec=600)
+        y_hat_900s, _ = self.classify_segments(X, eval_frequency_sec=900)
+        y_hat_1800s, _ = self.classify_segments(X, eval_frequency_sec=1800)
+        y_hat_2700s, _ = self.classify_segments(X, eval_frequency_sec=2700)
+        y_hat_3600s, _ = self.classify_segments(X, eval_frequency_sec=3600)
+        y_hat_5400s, _ = self.classify_segments(X, eval_frequency_sec=5400)
+        y_hat_7200s, _ = self.classify_segments(X, eval_frequency_sec=7200)
 
         return {
             "predicted": y_hat.softmax(dim=1),
@@ -357,6 +372,16 @@ class MASSCAverage(ptl.LightningModule):
             "y_hat_5s": y_hat_5s.softmax(dim=1),
             "y_hat_10s": y_hat_10s.softmax(dim=1),
             "y_hat_15s": y_hat_15s.softmax(dim=1),
+            "y_hat_60s": y_hat_60s.softmax(dim=1),
+            "y_hat_150s": y_hat_150s.softmax(dim=1),
+            "y_hat_300s": y_hat_300s.softmax(dim=1),
+            "y_hat_600s": y_hat_600s.softmax(dim=1),
+            "y_hat_900s": y_hat_900s.softmax(dim=1),
+            "y_hat_1800s": y_hat_1800s.softmax(dim=1),
+            "y_hat_2700s": y_hat_2700s.softmax(dim=1),
+            "y_hat_3600s": y_hat_3600s.softmax(dim=1),
+            "y_hat_5400s": y_hat_5400s.softmax(dim=1),
+            "y_hat_7200s": y_hat_7200s.softmax(dim=1),
             # "data": X.cpu(),
         }
 
@@ -368,19 +393,30 @@ class MASSCAverage(ptl.LightningModule):
         except AttributeError: # Catch exception if we've supplied dataloaders instead of DataModule
             all_records = sorted(self.trainer.test_dataloaders[0].dataset.records)
         # true = torch.cat([out['true'] for out in output_results], dim=0).permute([0, 2, 1])
-        true = torch.cat([out['true'] for out in output_results], dim=0).transpose(2, 1)
-        predicted = torch.cat([out['predicted'] for out in output_results], dim=0).permute([0, 2, 1])
-        stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in output_results], dim=0)
-        sequence_nrs = torch.cat([out['sequence_nr'] for out in output_results], dim=0)
-        logits = torch.cat([out['logits'] for out in output_results], dim=0).permute([0, 2, 1])
-        y_hat_3s = torch.cat([out['y_hat_3s'] for out in output_results], dim=0).permute([0, 2, 1])
-        y_hat_5s = torch.cat([out['y_hat_5s'] for out in output_results], dim=0).permute([0, 2, 1])
-        y_hat_10s = torch.cat([out['y_hat_10s'] for out in output_results], dim=0).permute([0, 2, 1])
-        y_hat_15s = torch.cat([out['y_hat_15s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # true = torch.cat([out['true'] for out in output_results], dim=0).transpose(2, 1)
+        # predicted = torch.cat([out['predicted'] for out in output_results], dim=0).permute([0, 2, 1])
+        # stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in output_results], dim=0)
+        # sequence_nrs = torch.cat([out['sequence_nr'] for out in output_results], dim=0)
+        # logits = torch.cat([out['logits'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_3s = torch.cat([out['y_hat_3s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_5s = torch.cat([out['y_hat_5s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_10s = torch.cat([out['y_hat_10s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_15s = torch.cat([out['y_hat_15s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_60s = torch.cat([out['y_hat_60s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_150s = torch.cat([out['y_hat_150s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_300s = torch.cat([out['y_hat_300s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_600s = torch.cat([out['y_hat_600s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_900s = torch.cat([out['y_hat_900s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_1800s = torch.cat([out['y_hat_1800s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_2700s = torch.cat([out['y_hat_2700s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_3600s = torch.cat([out['y_hat_3600s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_5400s = torch.cat([out['y_hat_5400s'] for out in output_results], dim=0).permute([0, 2, 1])
+        # y_hat_7200s = torch.cat([out['y_hat_7200s'] for out in output_results], dim=0).permute([0, 2, 1])
         # data = torch.cat([out['data'] for out in output_results], dim=0).permute([0, 2, 1])
         # records = [i for i, out in enumerate(output_results) for j, _ in enumerate(out['record'])]
 
         if self.use_ddp:
+            raise NotImplementedError
             record2int = {r: idx for idx, r in enumerate(all_records)}
             int2record = {idx: r for idx, r in enumerate(all_records)}
             records = torch.cat([torch.Tensor([record2int[r]]).type_as(stable_sleep) for out in output_results for r in out['record']], dim=0)
@@ -394,6 +430,16 @@ class MASSCAverage(ptl.LightningModule):
             out_y_hat_5s = [torch.zeros_like(y_hat_5s) for _ in range(dist.get_world_size())]
             out_y_hat_10s = [torch.zeros_like(y_hat_10s) for _ in range(dist.get_world_size())]
             out_y_hat_15s = [torch.zeros_like(y_hat_15s) for _ in range(dist.get_world_size())]
+            out_y_hat_60s = [torch.zeros_like(y_hat_60s) for _ in range(dist.get_world_size())]
+            out_y_hat_150s = [torch.zeros_like(y_hat_150s) for _ in range(dist.get_world_size())]
+            out_y_hat_300s = [torch.zeros_like(y_hat_300s) for _ in range(dist.get_world_size())]
+            out_y_hat_600s = [torch.zeros_like(y_hat_600s) for _ in range(dist.get_world_size())]
+            out_y_hat_900s = [torch.zeros_like(y_hat_900s) for _ in range(dist.get_world_size())]
+            out_y_hat_1800s = [torch.zeros_like(y_hat_1800s) for _ in range(dist.get_world_size())]
+            out_y_hat_2700s = [torch.zeros_like(y_hat_2700s) for _ in range(dist.get_world_size())]
+            out_y_hat_3600s = [torch.zeros_like(y_hat_3600s) for _ in range(dist.get_world_size())]
+            out_y_hat_5400s = [torch.zeros_like(y_hat_5400s) for _ in range(dist.get_world_size())]
+            out_y_hat_7200s = [torch.zeros_like(y_hat_7200s) for _ in range(dist.get_world_size())]
 
             dist.barrier()
             dist.all_gather(out_true, true)
@@ -406,6 +452,16 @@ class MASSCAverage(ptl.LightningModule):
             dist.all_gather(out_y_hat_5s, y_hat_5s)
             dist.all_gather(out_y_hat_10s, y_hat_10s)
             dist.all_gather(out_y_hat_15s, y_hat_15s)
+            dist.all_gather(out_y_hat_60s, y_hat_60s)
+            dist.all_gather(out_y_hat_150s, y_hat_150s)
+            dist.all_gather(out_y_hat_300s, y_hat_300s)
+            dist.all_gather(out_y_hat_600s, y_hat_600s)
+            dist.all_gather(out_y_hat_900s, y_hat_900s)
+            dist.all_gather(out_y_hat_1800s, y_hat_1800s)
+            dist.all_gather(out_y_hat_2700s, y_hat_2700s)
+            dist.all_gather(out_y_hat_3600s, y_hat_3600s)
+            dist.all_gather(out_y_hat_5400s, y_hat_5400s)
+            dist.all_gather(out_y_hat_7200s, y_hat_7200s)
 
             if dist.get_rank() == 0:
                 true = torch.cat(out_true)
@@ -418,6 +474,16 @@ class MASSCAverage(ptl.LightningModule):
                 y_hat_5s = torch.cat(out_y_hat_5s)
                 y_hat_10s = torch.cat(out_y_hat_10s)
                 y_hat_15s = torch.cat(out_y_hat_15s)
+                y_hat_60s = torch.cat(out_y_hat_60s)
+                y_hat_150s = torch.cat(out_y_hat_150s)
+                y_hat_300s = torch.cat(out_y_hat_300s)
+                y_hat_600s = torch.cat(out_y_hat_600s)
+                y_hat_900s = torch.cat(out_y_hat_900s)
+                y_hat_1800s = torch.cat(out_y_hat_1800s)
+                y_hat_2700s = torch.cat(out_y_hat_2700s)
+                y_hat_3600s = torch.cat(out_y_hat_3600s)
+                y_hat_5400s = torch.cat(out_y_hat_5400s)
+                y_hat_7200s = torch.cat(out_y_hat_7200s)
 
 
                 # acc = metrics.accuracy_score(t[s].argmax(-1), p[s].argmax(-1))
@@ -448,20 +514,51 @@ class MASSCAverage(ptl.LightningModule):
                 "yhat_5s": [],
                 "yhat_10s": [],
                 "yhat_15s": [],
+                "yhat_60s": [],
+                "yhat_150s": [],
+                "yhat_300s": [],
+                "yhat_600s": [],
+                "yhat_900s": [],
+                "yhat_1800s": [],
+                "yhat_2700s": [],
+                "yhat_3600s": [],
+                "yhat_5400s": [],
+                "yhat_7200s": [],
             } for r in all_records
         }
 
-        for r in tqdm(all_records, desc='Sorting predictions...'):
-            record_idx = [idx for idx, rec in enumerate(records) if r == rec]
-            current_t = true[record_idx].reshape(-1, *true.shape[2:])
-            current_p = predicted[record_idx].reshape(-1, predicted.shape[-1])
-            current_ss = stable_sleep[record_idx].reshape(-1).to(torch.bool)
-            current_l = logits[record_idx].reshape(-1, logits.shape[-1])
-            current_seq = sequence_nrs[record_idx]
-            current_3s = y_hat_3s[record_idx].reshape(-1, y_hat_3s.shape[-1])
-            current_5s = y_hat_5s[record_idx].reshape(-1, y_hat_5s.shape[-1])
-            current_10s = y_hat_10s[record_idx].reshape(-1, y_hat_10s.shape[-1])
-            current_15s = y_hat_15s[record_idx].reshape(-1, y_hat_15s.shape[-1])
+        for o in tqdm(output_results, desc='Sorting predictions'):
+            r = o['record'][0]
+
+            results[r]['true'] = o['true'].squeeze(0).T.cpu().numpy()
+            results[r]['predicted'] = o['predicted'].squeeze(0).T.cpu().numpy()
+            results[r]['stable_sleep'] = o['stable_sleep'].squeeze(0).cpu().numpy()
+            results[r]['logits'] = o['logits'].squeeze(0).T.cpu().numpy()
+            results[r]['seq_nr'] = o['sequence_nr'].squeeze(0).cpu().numpy()
+            for resolution in [3, 5, 10, 15, 60, 150, 300, 600, 900, 1800, 2700, 3600, 5400, 7200]:
+                results[r][f'yhat_{resolution}s'] = o[f'y_hat_{resolution}s'].squeeze(0).T.cpu().numpy()
+
+        # for r in tqdm(all_records, desc='Sorting predictions...'):
+        #     record_idx = [idx for idx, rec in enumerate(records) if r == rec]
+        #     current_t = true[record_idx].reshape(-1, *true.shape[2:])
+        #     current_p = predicted[record_idx].reshape(-1, predicted.shape[-1])
+        #     current_ss = stable_sleep[record_idx].reshape(-1).to(torch.bool)
+        #     current_l = logits[record_idx].reshape(-1, logits.shape[-1])
+        #     current_seq = sequence_nrs[record_idx]
+        #     current_3s = y_hat_3s[record_idx].reshape(-1, y_hat_3s.shape[-1])
+        #     current_5s = y_hat_5s[record_idx].reshape(-1, y_hat_5s.shape[-1])
+        #     current_10s = y_hat_10s[record_idx].reshape(-1, y_hat_10s.shape[-1])
+        #     current_15s = y_hat_15s[record_idx].reshape(-1, y_hat_15s.shape[-1])
+        #     current_60s = y_hat_60s[record_idx].reshape(-1, y_hat_60s.shape[-1])
+        #     current_150s = y_hat_150s[record_idx].reshape(-1, y_hat_150s.shape[-1])
+        #     current_300s = y_hat_300s[record_idx].reshape(-1, y_hat_300s.shape[-1])
+        #     current_600s = y_hat_600s[record_idx].reshape(-1, y_hat_600s.shape[-1])
+        #     current_900s = y_hat_900s[record_idx].reshape(-1, y_hat_900s.shape[-1])
+        #     current_1800s = y_hat_1800s[record_idx].reshape(-1, y_hat_1800s.shape[-1])
+        #     current_2700s = y_hat_2700s[record_idx].reshape(-1, y_hat_2700s.shape[-1])
+        #     current_3600s = y_hat_3600s[record_idx].reshape(-1, y_hat_3600s.shape[-1])
+        #     current_5400s = y_hat_5400s[record_idx].reshape(-1, y_hat_5400s.shape[-1])
+        #     current_7200s = y_hat_7200s[record_idx].reshape(-1, y_hat_7200s.shape[-1])
 
             # current_t = torch.cat([t for idx, t in enumerate(true) if idx in record_idx], dim=0)
             # current_p = torch.cat([p for idx, p in enumerate(predicted) if idx in record_idx], dim=0)
@@ -469,15 +566,25 @@ class MASSCAverage(ptl.LightningModule):
             # current_l = torch.cat([l for idx, l in enumerate(logits) if idx in record_idx], dim=0)
             # current_seq = torch.stack([s for idx, s in enumerate(sequence_nrs) if idx in record_idx])
 
-            results[r]['true'] = current_t.cpu().numpy()
-            results[r]['predicted'] = current_p.cpu().numpy()
-            results[r]['stable_sleep'] = current_ss.cpu().numpy()
-            results[r]['logits'] = current_l.cpu().numpy()
-            results[r]['seq_nr'] = current_seq.cpu().numpy()
-            results[r]['yhat_3s'] = current_3s.cpu().numpy()
-            results[r]['yhat_5s'] = current_5s.cpu().numpy()
-            results[r]['yhat_10s'] = current_10s.cpu().numpy()
-            results[r]['yhat_15s'] = current_15s.cpu().numpy()
+            # results[r]['true'] = current_t.cpu().numpy()
+            # results[r]['predicted'] = current_p.cpu().numpy()
+            # results[r]['stable_sleep'] = current_ss.cpu().numpy()
+            # results[r]['logits'] = current_l.cpu().numpy()
+            # results[r]['seq_nr'] = current_seq.cpu().numpy()
+            # results[r]['yhat_3s'] = current_3s.cpu().numpy()
+            # results[r]['yhat_5s'] = current_5s.cpu().numpy()
+            # results[r]['yhat_10s'] = current_10s.cpu().numpy()
+            # results[r]['yhat_15s'] = current_15s.cpu().numpy()
+            # results[r]['yhat_60s'] = current_60s.cpu().numpy()
+            # results[r]['yhat_150s'] = current_150s.cpu().numpy()
+            # results[r]['yhat_300s'] = current_300s.cpu().numpy()
+            # results[r]['yhat_600s'] = current_600s.cpu().numpy()
+            # results[r]['yhat_900s'] = current_900s.cpu().numpy()
+            # results[r]['yhat_1800s'] = current_1800s.cpu().numpy()
+            # results[r]['yhat_2700s'] = current_2700s.cpu().numpy()
+            # results[r]['yhat_3600s'] = current_3600s.cpu().numpy()
+            # results[r]['yhat_5400s'] = current_5400s.cpu().numpy()
+            # results[r]['yhat_7200s'] = current_7200s.cpu().numpy()
 
         return results
 

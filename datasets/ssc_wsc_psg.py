@@ -176,6 +176,7 @@ class SscWscPsgDataset(Dataset):
         cv_idx=None,
         eval_ratio=None,
         balanced_sampling=False,
+        sequence_length=5,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -189,6 +190,7 @@ class SscWscPsgDataset(Dataset):
         self.cv_idx = cv_idx
         self.eval_ratio = eval_ratio
         self.balanced_sampling = balanced_sampling
+        self.sequence_length = sequence_length
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
         # self.data = {r: [] for r in self.records}
         self.index_to_record = []
@@ -216,6 +218,7 @@ class SscWscPsgDataset(Dataset):
                 scaling=self.scaling,
                 adjustment=self.adjustment,
                 overlap=self.overlap,
+                sequence_length=self.sequence_length,
             )
             for record in self.records
         )
@@ -229,7 +232,7 @@ class SscWscPsgDataset(Dataset):
         ):
             # Some sequences are all unstable sleep, which interferes with the loss calculations.
             # This selects sequences where at least one epoch is sleep.
-            select_sequences = np.where(stable_sleep.squeeze().any(axis=1))[0]
+            select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
             self.record_indices[record] = select_sequences  # np.arange(sequences_in_file)
             self.record_class_indices[record] = get_class_sequence_idx(hypnogram, select_sequences)
             self.index_to_record.extend(
@@ -320,6 +323,9 @@ class SscWscPsgDataset(Dataset):
             scaler = self.scalers[current_record]
             stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze()
 
+            if isinstance(self.sequence_length, str) and self.sequence_length == "full":
+                current_sequence = slice(None)
+
             # Grab data
             with File(os.path.join(self.data_dir, current_record), "r") as f:
                 x = f["M"][current_sequence].astype("float32")
@@ -332,6 +338,13 @@ class SscWscPsgDataset(Dataset):
 
         if np.isnan(x).any():
             print("NaNs detected!")
+
+        if isinstance(self.sequence_length, str) and self.sequence_length == "full":
+            N, C, T = x.shape
+            x = x.transpose(1, 0, 2).reshape(C, N * T)
+            N, C, T = t.shape
+            t = t.transpose(1, 0, 2).reshape(C, N * T)
+            current_sequence = self.index_to_record[idx]["idx"]
 
         if scaler:
             x = scaler.transform(x.T).T  # (n_channels, n_samples)
@@ -432,7 +445,7 @@ class SscWscPsgSubset(Dataset):
         self.balanced_sampling = balanced_sampling
         self.records = [self.dataset.records[idx] for idx in self.record_indices]
         if self.balanced_sampling:
-            print('Using balanced sampling scheme')
+            print("Using balanced sampling scheme")
             self.sequence_indices = self._get_subset_class_indices()
         else:
             self.sequence_indices = (
@@ -496,6 +509,7 @@ class SscWscDataModule(pl.LightningDataModule):
         scaling="robust",
         adjustment=None,
         balanced_sampling=False,
+        sequence_length=5,
         **kwargs,
     ):
         super().__init__()
@@ -510,6 +524,7 @@ class SscWscDataModule(pl.LightningDataModule):
         self.n_records = n_records
         self.n_workers = n_workers
         self.scaling = scaling
+        self.sequence_length = sequence_length
         self.data = {"train": data_dir, "test": "data/test/raw"}
         self.dataset_params = dict(
             # data_dir=self.data_dir,
@@ -520,6 +535,7 @@ class SscWscDataModule(pl.LightningDataModule):
             n_records=self.n_records,
             scaling=self.scaling,
             adjustment=self.adjustment,
+            sequence_length=self.sequence_length,
         )
 
     def setup(self, stage="fit"):
@@ -576,6 +592,11 @@ class SscWscDataModule(pl.LightningDataModule):
         dataset_group.add_argument("--cv", default=None, type=int)
         dataset_group.add_argument("--cv_idx", default=None, type=int)
         dataset_group.add_argument("--balanced_sampling", default=False, action="store_true")
+        dataset_group.add_argument(
+            "--sequence_length",
+            default=5,
+            help="Sequence length in minutes (default: 5 min). If 'all', an entire PSG is loaded at a time (should be used with batch_size=1).",
+        )
 
         # DATALOADER specific
         dataloader_group = parser.add_argument_group("dataloader")
