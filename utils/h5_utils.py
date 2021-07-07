@@ -77,7 +77,45 @@ def load_psg_h5_data(filename, scaling=None):
     return sequences_in_file, scaler
 
 
-def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
+# def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
+
+#     if scaling in SCALERS.keys():
+#         scaler = SCALERS[scaling]()
+#     else:
+#         scaler = None
+
+#     with File(filename, "r") as h5:
+#         M = h5["M"][:]
+#         L = h5["L"][:]
+#         N, C, T = M.shape
+#         sequences_in_file = N
+
+#         if scaler:
+#             scaler.fit(M.transpose(1, 0, 2).reshape((C, N * T)).T)
+
+#         # Remember that the output array from the H5 has 50 % overlap between segments.
+#         # Use the following to split into even and odd
+#         if overlap:
+#             hyp_shape = L.shape
+#             hyp_even = L[0::2]
+#             hyp_odd = L[1::2]
+#             stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], False)
+#             stable_sleep[0::2] = get_stable_sleep_periods(hyp_even.argmax(axis=1), adjustment)[0]
+#             stable_sleep[1::2] = get_stable_sleep_periods(hyp_odd.argmax(axis=1), adjustment)[0]
+#         else:
+#             if adjustment == 0:
+#                 stable_sleep = np.full(L.argmax(axis=1).shape, True, dtype=np.bool)
+#             else:
+#                 stable_sleep = get_stable_sleep_periods(L.argmax(axis=1), adjustment)[0]
+
+#         # Remove unknown stage
+#         unknown_stage = get_unknown_stage(L)
+#         stable_sleep[unknown_stage] = False
+
+#     return sequences_in_file, scaler, stable_sleep
+
+
+def initialize_record(filename, scaling=None, overlap=True, adjustment=30, sequence_length=5):
 
     if scaling in SCALERS.keys():
         scaler = SCALERS[scaling]()
@@ -85,32 +123,36 @@ def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
         scaler = None
 
     with File(filename, "r") as h5:
-        M = h5["M"][:]
-        L = h5["L"][:]
-        N, C, T = M.shape
-        sequences_in_file = N
+        X = h5["M"][:]
+        Y = h5["L"][:]
+    N, C, T = X.shape
+    hypnogram = Y[:, :, ::30]
+    hyp_shape = hypnogram.shape
+    sequences_in_file = N
 
-        if scaler:
-            scaler.fit(M.transpose(1, 0, 2).reshape((C, N * T)).T)
+    if scaler:
+        scaler.fit(X.transpose(1, 0, 2).reshape((C, N * T)).T)
 
-        # Remember that the output array from the H5 has 50 % overlap between segments.
-        # Use the following to split into even and odd
-        if overlap:
-            hyp_shape = L.shape
-            hyp_even = L[0::2]
-            hyp_odd = L[1::2]
+    # Remember that the output array from the H5 has 50 % overlap between segments.
+    # Use the following to split into even and odd
+    if overlap:
+        hyp_even = hypnogram[0::2]
+        hyp_odd = hypnogram[1::2]
+        if adjustment > 0:
             stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], False)
             stable_sleep[0::2] = get_stable_sleep_periods(hyp_even.argmax(axis=1), adjustment)[0]
             stable_sleep[1::2] = get_stable_sleep_periods(hyp_odd.argmax(axis=1), adjustment)[0]
         else:
-            if adjustment == 0:
-                stable_sleep = np.full(L.argmax(axis=1).shape, True, dtype=np.bool)
-            else:
-                stable_sleep = get_stable_sleep_periods(L.argmax(axis=1), adjustment)[0]
+            stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], True)
+    else:
+        if adjustment > 0:
+            stable_sleep = get_stable_sleep_periods(Y.argmax(axis=1), adjustment)[0]
+        else:
+            stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], True)
 
-        # Remove unknown stage
-        unknown_stage = get_unknown_stage(L)
-        stable_sleep[unknown_stage] = False
+    # Remove unknown stage
+    unknown_stage = get_unknown_stage(hypnogram)
+    stable_sleep[unknown_stage] = False
 
     return sequences_in_file, scaler, stable_sleep
 

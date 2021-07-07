@@ -19,9 +19,9 @@ from torch.utils.data import Subset
 from tqdm import tqdm
 
 try:
-    from utils import ParallelExecutor, load_h5_data
+    from utils import ParallelExecutor, load_h5_data, initialize_record
 except ImportError:
-    from utils.h5_utils import load_h5_data
+    from utils.h5_utils import initialize_record, load_h5_data
     from utils.parallel_bar import ParallelExecutor
 
 warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
@@ -138,61 +138,6 @@ def get_stable_sleep_periods(hypnogram, adjustment=30):
 #         #     bin_counts =
 
 #     return sequences_in_file, scaler, stable_sleep, bin_counts
-
-
-def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
-
-    if scaling in SCALERS.keys():
-        scaler = SCALERS[scaling]()
-    else:
-        scaler = None
-
-    with File(filename, "r") as h5:
-        # if "A2081_5 194244.h5" in filename:
-        # print("Hej")
-        N, C, T = h5["M"].shape
-        hypnogram = h5["L"][:, :, ::30]
-        hyp_shape = hypnogram.shape
-        sequences_in_file = N
-
-        if scaler:
-            scaler.fit(h5["M"][:].transpose(1, 0, 2).reshape((C, N * T)).T)
-
-        # Remember that the output array from the H5 has 50 % overlap between segments.
-        # Use the following to split into even and odd
-        if overlap:
-            hyp_even = hypnogram[0::2]
-            hyp_odd = hypnogram[1::2]
-            if adjustment > 0:
-                stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], False)
-                stable_sleep[0::2] = get_stable_sleep_periods(hyp_even.argmax(axis=1), adjustment)[0]
-                stable_sleep[1::2] = get_stable_sleep_periods(hyp_odd.argmax(axis=1), adjustment)[0]
-            else:
-                stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], True)
-        else:
-            if adjustment > 0:
-                stable_sleep = get_stable_sleep_periods(h5["L"][:].argmax(axis=1), adjustment)[0]
-            else:
-                stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], True)
-
-        # Remove unknown stage
-        unknown_stage = get_unknown_stage(hypnogram)
-        stable_sleep[unknown_stage] = False
-
-        # Get bin counts
-        if overlap:
-            # hyp = h5["L"][::2].argmax(axis=1)[~get_unknown_stage(h5["L"][::2])][::30]
-            hyp = hyp_even.argmax(axis=1)[~unknown_stage[::2] & stable_sleep[::2]]
-        else:
-            # hyp = h5["L"][:].argmax(axis=1)[~get_unknown_stage(h5["L"][:])][::30]
-            hyp = hypnogram.argmax(axis=1)[~unknown_stage & stable_sleep]
-        bin_counts = np.bincount(hyp, minlength=C)
-
-    hypnogram = hypnogram.argmax(1)
-    # select_sequences = np.where(stable_sleep.squeeze().any(axis=1))[0]
-    # class_indices = get_class_sequence_idx(hypnogram, select_sequences)
-
-    return hypnogram, sequences_in_file, scaler, stable_sleep, bin_counts
 
 
 def load_psg_h5_data(filename, scaling=None):
