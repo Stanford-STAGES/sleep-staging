@@ -48,48 +48,16 @@ def run_predict():
 
     # Setup model
     model = utils.get_model(args)
-    # if args.model_type == "stages":
-    #     # Update some hyperparameters
-    #     # if args.model_name.split("_")[1] == "rh":
-    #     #     args.n_hidden_units = np.random.randint(256, 256 + 128)  # np.random.randint(0.5 * 256, 1.5 * 256 + 1)
-    #     model = StagesModel()
-    # elif args.model_type == "massc":
-    #     model = MasscModel()
-    # elif args.model_type == "massc_v2":
-    #     model = MasscV2Model.load_from_checkpoint(args.resume_from_checkpoint)
-    # elif args.model_type == "simple_massc":
-    #     model = SimpleMasscModel(**vars(args))
-    # elif args.model_type == "avgloss_massc":
-    #     model = AvgLossMasscModel(**vars(args))
-    # elif args.model_type == "utime":
-    #     model = UTimeModel(**vars(args))
-    # else:
-    #     raise NotImplementedError
-
-    # Setup callbacks
-    # wandb_logger_params = dict(save_dir="experiments", project="sleep-staging", log_model=True)
-    # wandb_logger_params = dict(project="sleep-staging", log_model=False)
-    # if args.model_type == "stages":
-    # wandb_logger_params.update(dict(name=args.model_name))
-    # elif args.model_type == "massc":
-    # wandb_logger_params.update(dict(name=args.model_type))
-    # wandb_logger_params.update(dict(name=os.path.join(*args.save_dir.parts[1:]), id=datetime.now().strftime("%Y%m%d_%H%M%S")))
-    # checkpoint_logger = ModelCheckpoint(filepath=os.path.join(args.save_dir, "{epoch}"))
-    # lr_logger = LearningRateLogger()
-    # wandb_logger = WandbLogger(**wandb_logger_params)
-    # wandb_logger
-    # wandb_logger.watch(model)
 
     # Define trainer object from arguments
     trainer = Trainer.from_argparse_args(args, logger=False, deterministic=True)
 
-    # # Fit model using trainer
-    # trainer.fit(model)
-
     # ------------------------------------------------------------------------------- #
     # TEST ON NEW DATA
     # ------------------------------------------------------------------------------- #
-    results_dir = os.path.dirname(args.resume_from_checkpoint)
+    results_dir = os.path.join(os.path.dirname(args.resume_from_checkpoint), "hi_lo_res")
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
 
     test_dm = []
     ds_args = model.hparams
@@ -100,16 +68,35 @@ def run_predict():
     ds_args["batch_size"] = args.batch_size
     ds_args["limit_test_batches"] = args.limit_test_batches
     ds_args["adjustment"] = args.adjustment
+    ds_args["sequence_length"] = args.sequence_length
 
     # test_dm.append(("SSC-WSC_eval", datasets.SscWscDataModule(**ds_args)),)
     # test_dm[-1][1].setup("fit")
-    test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
-    test_dm[-1][1].setup("test")
+
+    # test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
+    # test_dm[-1][1].setup("test")
+
     # test_dm.append(("SSC-WSC_more-spindles", datasets.SscWscDataModule(**ds_args)),)
     # test_dm[-1][1].setup("test")
-    khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
-    test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
-    test_dm[-1][1].setup("test")
+    # khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
+    # test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
+    # test_dm[-1][1].setup("test")
+    test_args = dict(
+        batch_size=args.batch_size,
+        n_workers=args.n_workers,
+        n_records=None,
+        scaling="robust",
+        adjustment=0,
+        n_jobs=args.n_jobs,
+        sequence_length=args.sequence_length,
+    )
+    # test_dm.append(("DHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/dhc/raw"}, **test_args)),)
+    # test_dm.append(("IHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ihc/raw"}, **test_args)),)
+    # test_dm.append(("KHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/khc/raw"}, **test_args)),)
+    # test_dm.append(("JCTS", datasets.BaseDataModule(data_dir={"train": None, "test": "data/jcts/raw"}, **test_args)),)
+    test_dm.append(("AHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ahc/raw"}, **test_args)),)
+    for dm in test_dm:
+        dm[1].setup("test")
 
     for name, tdm in test_dm:
         # predictions = trainer.test(model, test_dataloaders=tdl, verbose=False)[0]
