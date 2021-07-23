@@ -24,8 +24,8 @@ def get_loggers_callbacks(args, model=None):
             pl_loggers.CSVLogger(**csv_logger_params),
             pl_loggers.WandbLogger(**wandb_logger_params),
         ]
-        if model:
-            loggers[-1].watch(model)
+        # if model:
+        #     loggers[-1].watch(model)
 
         # Setup callback(s) params
         checkpoint_monitor_params = dict(
@@ -37,8 +37,8 @@ def get_loggers_callbacks(args, model=None):
         earlystopping_parameters = dict(monitor=args.earlystopping_monitor, patience=args.earlystopping_patience,)
         callbacks = [
             pl_callbacks.ModelCheckpoint(**checkpoint_monitor_params),
-            pl_callbacks.EarlyStopping(**earlystopping_parameters),
-            pl_callbacks.LearningRateMonitor(),
+            # pl_callbacks.EarlyStopping(**earlystopping_parameters),
+            # pl_callbacks.LearningRateMonitor() if args.lr_scheduler ,
         ]
 
         return loggers, callbacks
