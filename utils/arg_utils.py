@@ -114,6 +114,6 @@ def get_args(print_args=False):
         args.seed = 1337
 
     if print_args:
-        pprint.pprint(vars(args))
+        pprint.pprint(vars(args), indent=4)
 
     return args
