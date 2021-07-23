@@ -54,8 +54,8 @@ def getEDFFiles(path2check):
     if p.is_dir():
         print("Checking", path2check, "for edf files.")
         edfFiles = list(p.glob("**/*.[EeRr][DdEe][FfCc]"))  # make search case-insensitive
-        print('Removing any MSLT studies.')
-        edfFiles = [edf for edf in edfFiles if not 'mslt' in edf.stem.lower()]
+        print("Removing any MSLT studies.")
+        edfFiles = [edf for edf in edfFiles if not "mslt" in edf.stem.lower()]
     else:
         print(path2check, " is not a valid directory.")
         edfFiles = []
@@ -159,7 +159,7 @@ def run(args):
     edfFiles = getEDFFilenames(path2check)
     num_edfs = len(edfFiles)
     if num_edfs == 0:
-        print("No files found!")
+        print("No file(s) found!")
     else:
         label_set_counts, _ = getAllChannelLabelsWithCounts(edfFiles)
         # print(label_set_counts)
@@ -195,7 +195,7 @@ def run(args):
             with open(json_filename, "w") as json_file:
                 json.dump(toFile, json_file, indent=4, sort_keys=True)
             # jsonStr = json.dumps(toFile, indent=4, sort_keys=True)
-            # jsonFileOut.write_text(jsonStr)
+            # json_filename.write_text(jsonStr)
             print(json.dumps(toFile))
             print()
             print("JSON data written to file:", json_filename)
