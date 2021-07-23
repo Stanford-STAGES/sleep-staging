@@ -2,12 +2,10 @@ import argparse
 import json
 import logging
 import os
-import pprint
 import random
 import tempfile
 from glob import glob
 
-os.chdir("/home/users/alexno/sleep-staging")
 
 import numpy as np
 import pandas as pd
@@ -19,8 +17,8 @@ from utils.errors import MissingSignalsError
 from utils.errors import ReferencingError
 from preprocessing import process_single_file
 
-# from utils import chunks
 
+os.chdir("/home/users/alexno/sleep-staging")
 try:
     df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
 except:
@@ -125,18 +123,18 @@ def batch_start_jobs(args):
     # random.shuffle(listF)
     # n_per_batch = int(np.floor(len(listF) / n_jobs))
     # test = ['A0005_4 175057', 'A0003_4 164611', 'A0013_6 182931', 'A0008_7 033111', 'A0009_4 171358', 'A0013_7 120409', 'A0008_4 171252', 'A0001_4 165907', 'A0001_5 180135']
-    if n_jobs:
-        logger.info(f"Submitting {n_jobs} job(s) for {len(listF)} EDF files...")
+    # if n_jobs:
+    logger.info(f"Submitting {n_jobs} job(s) for {len(listF)} EDF files...")
 
-        file_chunks = [[str(s) for s in arr] for arr in np.array_split(listF, n_jobs)]
+    file_chunks = [[str(s) for s in arr] for arr in np.array_split(listF, n_jobs)]
 
-        for idx, current_filelist in enumerate(file_chunks):
-            log_filename = os.path.join(batch_log_dir, f"datasplit_{idx}")
+    for idx, current_filelist in enumerate(file_chunks):
+        log_filename = os.path.join(batch_log_dir, f"datasplit_{idx}")
 
-            with open(log_filename + "_files.txt", "w") as f:
-                f.writelines(line + "\n" for line in current_filelist)
-            # if idx < 8:
-            content = f"""#!/bin/bash
+        with open(log_filename + "_files.txt", "w") as f:
+            f.writelines(line + "\n" for line in current_filelist)
+        # if idx < 8:
+        content = f"""#!/bin/bash
 #
 #SBATCH --job-name="{cohort}_{idx}"
 #SBATCH -p mignot,owners,normal
@@ -153,36 +151,36 @@ cd $HOME/sleep-staging
 
 python -c 'from preprocessing.batch_processing import batch_chunk_wrapper; batch_chunk_wrapper({fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}", "{log_filename}", "{cohort}")'
 """
-            with tempfile.NamedTemporaryFile(delete=False) as j:
-                j.write(content.encode())
-            os.system("sbatch {}".format(j.name))
+        with tempfile.NamedTemporaryFile(delete=False) as j:
+            j.write(content.encode())
+        os.system("sbatch {}".format(j.name))
 
-    else:
-        print(f"Submitting {len(listF)} jobs...")
-        for current_file in listF:
-            # print(current_file)
-            # if not os.path.basename(current_file).split('.')[0] in test:
-            #     continue
-            content = f"""#!/bin/bash
-#
-#SBATCH --job-name="{os.path.basename(current_file)}"
-#SBATCH -p mignot,owners,normal
-#SBATCH --time=10:00:00
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=16G
-#SBATCH --output="{os.path.join(batch_log_dir, os.path.basename(current_file))}.out"
-#SBATCH --error="{os.path.join(batch_log_dir, os.path.basename(current_file))}.err"
-##################################################
+    #     else:
+    #         print(f"Submitting {len(listF)} jobs...")
+    #         for current_file in listF:
+    #             # print(current_file)
+    #             # if not os.path.basename(current_file).split('.')[0] in test:
+    #             #     continue
+    #             content = f"""#!/bin/bash
+    # #
+    # #SBATCH --job-name="{os.path.basename(current_file)}"
+    # #SBATCH -p mignot,owners,normal
+    # #SBATCH --time=10:00:00
+    # #SBATCH --cpus-per-task=2
+    # #SBATCH --mem=16G
+    # #SBATCH --output="{os.path.join(batch_log_dir, os.path.basename(current_file))}.out"
+    # #SBATCH --error="{os.path.join(batch_log_dir, os.path.basename(current_file))}.err"
+    # ##################################################
 
-source $PI_HOME/miniconda3/bin/activate
-conda activate pt1.7
-cd $HOME/sleep-staging
+    # source $PI_HOME/miniconda3/bin/activate
+    # conda activate pt1.7
+    # cd $HOME/sleep-staging
 
-python -c 'from batch_processing import {process_fn.__name__}; {process_fn.__name__}("{current_file}", {fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}", "{cohort}")'
-"""
-            with tempfile.NamedTemporaryFile(delete=False) as j:
-                j.write(content.encode())
-            os.system("sbatch {}".format(j.name))
+    # python -c 'from batch_processing import {process_fn.__name__}; {process_fn.__name__}("{current_file}", {fs}, {seq_len}, {overlap}, "{subset}", "{encoding_type}", "{out_dir}", "{cohort}")'
+    # """
+    #             with tempfile.NamedTemporaryFile(delete=False) as j:
+    #                 j.write(content.encode())
+    #             os.system("sbatch {}".format(j.name))
 
     print("All jobs have been submitted!")
 
@@ -244,196 +242,193 @@ def batch_chunk_wrapper(fs, seq_len, overlap, subset, encoding_type, out_dir, lo
     return 0
 
 
-def batch_process_and_save(current_file, fs, seq_len, overlap, subset, encoding_type="raw", out_dir=None):
-    import traceback
+# def batch_process_and_save(current_file, fs, seq_len, overlap, subset, encoding_type="raw", out_dir=None):
+#     import traceback
 
-    try:
-        M, L, W, Z, _, _ = process_single_file(current_file, fs, seq_len, overlap, encoding=encoding_type)
-    except MissingHypnogramError as err:
-        if out_dir:
-            missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "missing_hyp")
-        else:
-            missing_path = f"./batch/{subset}/{encoding_type}/missing_hyp"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    except MissingSignalsError as err:
-        if out_dir:
-            missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "missing_sigs")
-        else:
-            missing_path = f"./batch/{subset}/{encoding_type}/missing_sigs"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    except ReferencingError as err:
-        if out_dir:
-            missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "referencing")
-        else:
-            missing_path = f"./batch/{subset}/{encoding_type}/referencing"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    except:
-        if out_dir:
-            missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "errs")
-        else:
-            missing_path = f"./batch/{subset}/{encoding_type}/errs"
-        err = traceback.format_exc()
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
+#     try:
+#         M, L, W, Z, _, _ = process_single_file(current_file, fs, seq_len, overlap, encoding=encoding_type)
+#     except MissingHypnogramError as err:
+#         if out_dir:
+#             missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "missing_hyp")
+#         else:
+#             missing_path = f"./batch/{subset}/{encoding_type}/missing_hyp"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     except MissingSignalsError as err:
+#         if out_dir:
+#             missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "missing_sigs")
+#         else:
+#             missing_path = f"./batch/{subset}/{encoding_type}/missing_sigs"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     except ReferencingError as err:
+#         if out_dir:
+#             missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "referencing")
+#         else:
+#             missing_path = f"./batch/{subset}/{encoding_type}/referencing"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     except:
+#         if out_dir:
+#             missing_path = os.path.join(out_dir, "logs", subset, encoding_type, "errs")
+#         else:
+#             missing_path = f"./batch/{subset}/{encoding_type}/errs"
+#         err = traceback.format_exc()
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
 
-    # Save to H5 file
-    if out_dir:
-        save_dir = out_dir
-    else:
-        save_dir = f"./data/{subset}/{encoding_type}/individual_encodings"
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    save_name = os.path.join(save_dir, os.path.basename(current_file).split(".")[0] + ".h5")
-    chunks_M = (1,) + M.shape[1:]  # M.shape[1], M.shape[2])
-    chunks_L = (1,) + L.shape[1:]  # (1, L.shape[1], L.shape[2])
-    if W is not None:
-        chunks_W = (1,) + W.shape[1:]
-    if Z is not None:
-        chunks_Z = (1,) + Z.shape[1:]
-        # chunks_M = (M.shape[0], M.shape[1], 1)
-        # chunks_L = (L.shape[0], L.shape[1], 1)
-        # chunks_W = (W.shape[0], 1)
-    with File(save_name, "w") as f:
-        f.create_dataset("M", data=M, chunks=chunks_M)
-        f.create_dataset("L", data=L, chunks=chunks_L)
-        if W is not None:
-            f.create_dataset("W", data=W, chunks=chunks_W)
-        if Z is not None:
-            f.create_dataset("Z", data=Z, chunks=chunks_Z)
+#     # Save to H5 file
+#     if out_dir:
+#         save_dir = out_dir
+#     else:
+#         save_dir = f"./data/{subset}/{encoding_type}/individual_encodings"
+#     if not os.path.exists(save_dir):
+#         os.makedirs(save_dir)
+#     save_name = os.path.join(save_dir, os.path.basename(current_file).split(".")[0] + ".h5")
+#     chunks_M = (1,) + M.shape[1:]  # M.shape[1], M.shape[2])
+#     chunks_L = (1,) + L.shape[1:]  # (1, L.shape[1], L.shape[2])
+#     if W is not None:  # We may or may not have stage-specific weights
+#         chunks_W = (1,) + W.shape[1:]
+#     if Z is not None:  # We may or may not have stable sleep indicators
+#         chunks_Z = (1,) + Z.shape[1:]
+#     with File(save_name, "w") as f:
+#         f.create_dataset("M", data=M, chunks=chunks_M)
+#         f.create_dataset("L", data=L, chunks=chunks_L)
+#         if W is not None:
+#             f.create_dataset("W", data=W, chunks=chunks_W)
+#         if Z is not None:
+#             f.create_dataset("Z", data=Z, chunks=chunks_Z)
 
 
-def batch_process_and_save_raw(current_file, fs, seq_len, overlap, subset, encoding_type="raw"):
-    import traceback
+# def batch_process_and_save_raw(current_file, fs, seq_len, overlap, subset, encoding_type="raw"):
+#     import traceback
 
-    try:
-        M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(
-            current_file, fs, seq_len, overlap, encoding=encoding_type
-        )
-    except MissingHypnogramError as err:
-        missing_path = f"./batch/{subset}/{encoding_type}/missing_hyp"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    except MissingSignalsError as err:
-        missing_path = f"./batch/{subset}/{encoding_type}/missing_sigs"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    except ReferencingError as err:
-        missing_path = f"./batch/{subset}/{encoding_type}/referencing"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    except:
-        missing_path = f"./batch/{subset}/{encoding_type}/errs"
-        err = traceback.format_exc()
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    # if is_missing_hyp:
-    #     if not os.path.exists('./batch/missing_hyp'):
-    #         os.makedirs('./batch/missing_hyp')
-    #     with open(f'./batch/missing_hyp/{os.path.basename(current_file)}.txt', 'w') as f:
-    #         f.writelines(map(lambda x: x + '\n', []))
-    #     return -1
-    # elif is_missing_sigs:
-    #     if not os.path.exists('./batch/missing_sigs'):
-    #         os.makedirs('./batch/missing_sigs')
-    #     with open(f'./batch/missing_sigs/{os.path.basename(current_file)}.txt', 'w') as f:
-    #         f.writelines(map(lambda x: x + '\n', []))
-    #     return -1
+#     try:
+#         M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(
+#             current_file, fs, seq_len, overlap, encoding=encoding_type
+#         )
+#     except MissingHypnogramError as err:
+#         missing_path = f"./batch/{subset}/{encoding_type}/missing_hyp"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     except MissingSignalsError as err:
+#         missing_path = f"./batch/{subset}/{encoding_type}/missing_sigs"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     except ReferencingError as err:
+#         missing_path = f"./batch/{subset}/{encoding_type}/referencing"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     except:
+#         missing_path = f"./batch/{subset}/{encoding_type}/errs"
+#         err = traceback.format_exc()
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     # if is_missing_hyp:
+#     #     if not os.path.exists('./batch/missing_hyp'):
+#     #         os.makedirs('./batch/missing_hyp')
+#     #     with open(f'./batch/missing_hyp/{os.path.basename(current_file)}.txt', 'w') as f:
+#     #         f.writelines(map(lambda x: x + '\n', []))
+#     #     return -1
+#     # elif is_missing_sigs:
+#     #     if not os.path.exists('./batch/missing_sigs'):
+#     #         os.makedirs('./batch/missing_sigs')
+#     #     with open(f'./batch/missing_sigs/{os.path.basename(current_file)}.txt', 'w') as f:
+#     #         f.writelines(map(lambda x: x + '\n', []))
+#     #     return -1
 
-    # Save to H5 file
-    save_dir = f"./data/{subset}/raw/individual_encodings"
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    save_name = os.path.join(save_dir, os.path.basename(current_file).split(".")[0] + ".h5")
-    with File(save_name, "w") as f:
-        f.create_dataset("M", data=M, chunks=(1, M.shape[1], M.shape[2]))
-        f.create_dataset("L", data=L, chunks=(1, L.shape[1], L.shape[2]))
-        if W:
-            f.create_dataset("W", data=W)
+#     # Save to H5 file
+#     save_dir = f"./data/{subset}/raw/individual_encodings"
+#     if not os.path.exists(save_dir):
+#         os.makedirs(save_dir)
+#     save_name = os.path.join(save_dir, os.path.basename(current_file).split(".")[0] + ".h5")
+#     with File(save_name, "w") as f:
+#         f.create_dataset("M", data=M, chunks=(1, M.shape[1], M.shape[2]))
+#         f.create_dataset("L", data=L, chunks=(1, L.shape[1], L.shape[2]))
+#         if W:
+#             f.create_dataset("W", data=W)
 
 
-def batch_process_and_save_encoding(current_file, fs, seq_len, overlap, encoding_type="cc"):
-    import traceback
+# def batch_process_and_save_encoding(current_file, fs, seq_len, overlap, encoding_type="cc"):
+#     import traceback
 
-    try:
-        M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(current_file, fs, seq_len, overlap)
-    except MissingHypnogramError as err:
-        missing_path = f"./batch/{encoding_type}/missing_hyp"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    except MissingSignalsError as err:
-        missing_path = f"./batch/{encoding_type}/missing_sigs"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    except ReferencingError as err:
-        missing_path = f"./batch/{encoding_type}/referencing"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    except:
-        err = traceback.format_exc()
-        missing_path = f"./batch/{encoding_type}/errs"
-        if not os.path.exists(missing_path):
-            os.makedirs(missing_path)
-        with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
-            f.write(str(err))
-        return -1
-    # if is_missing_hyp:
-    #     if not os.path.exists('./batch/missing_hyp'):
-    #         os.makedirs('./batch/missing_hyp')
-    #     with open(f'./batch/missing_hyp/{os.path.basename(current_file)}.txt', 'w') as f:
-    #         f.writelines(map(lambda x: x + '\n', []))
-    #     return -1
-    # elif is_missing_sigs:
-    #     if not os.path.exists('./batch/missing_sigs'):
-    #         os.makedirs('./batch/missing_sigs')
-    #     with open(f'./batch/missing_sigs/{os.path.basename(current_file)}.txt', 'w') as f:
-    #         f.writelines(map(lambda x: x + '\n', []))
-    #     return -1
+#     try:
+#         M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(current_file, fs, seq_len, overlap)
+#     except MissingHypnogramError as err:
+#         missing_path = f"./batch/{encoding_type}/missing_hyp"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     except MissingSignalsError as err:
+#         missing_path = f"./batch/{encoding_type}/missing_sigs"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     except ReferencingError as err:
+#         missing_path = f"./batch/{encoding_type}/referencing"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     except:
+#         err = traceback.format_exc()
+#         missing_path = f"./batch/{encoding_type}/errs"
+#         if not os.path.exists(missing_path):
+#             os.makedirs(missing_path)
+#         with open(os.path.join(missing_path, f"{os.path.basename(current_file)}.txt"), "w") as f:
+#             f.write(str(err))
+#         return -1
+#     # if is_missing_hyp:
+#     #     if not os.path.exists('./batch/missing_hyp'):
+#     #         os.makedirs('./batch/missing_hyp')
+#     #     with open(f'./batch/missing_hyp/{os.path.basename(current_file)}.txt', 'w') as f:
+#     #         f.writelines(map(lambda x: x + '\n', []))
+#     #     return -1
+#     # elif is_missing_sigs:
+#     #     if not os.path.exists('./batch/missing_sigs'):
+#     #         os.makedirs('./batch/missing_sigs')
+#     #     with open(f'./batch/missing_sigs/{os.path.basename(current_file)}.txt', 'w') as f:
+#     #         f.writelines(map(lambda x: x + '\n', []))
+#     #     return -1
 
-    # Save to H5 file
-    save_dir = "./data/individual_encodings"
-    if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
-    save_name = os.path.join(save_dir, os.path.basename(current_file).split(".")[0] + ".h5")
-    with File(save_name, "w") as f:
-        f.create_dataset("M", data=M)
-        f.create_dataset("L", data=L)
-        f.create_dataset("W", data=W)
+#     # Save to H5 file
+#     save_dir = "./data/individual_encodings"
+#     if not os.path.exists(save_dir):
+#         os.mkdir(save_dir)
+#     save_name = os.path.join(save_dir, os.path.basename(current_file).split(".")[0] + ".h5")
+#     with File(save_name, "w") as f:
+#         f.create_dataset("M", data=M)
+#         f.create_dataset("L", data=L)
+#         f.create_dataset("W", data=W)
 
 
 def batch_mix_encodings(args):
@@ -588,5 +583,5 @@ if __name__ == "__main__":
         args.save_dir = args.out_dir
         batch_mix_encodings(args)
     else:
-        # batch_chunk_wrapper(128, 10, 0, "test", "raw", "data/ahc/raw", "logs/preprocessing/ahc/raw/datasplit_0", "ahc")
+        # batch_chunk_wrapper(128, 10, 5, "train", "raw", "data/ssc/raw", "logs/preprocessing/ssc/raw/datasplit_0", "ssc")
         batch_start_jobs(args)
