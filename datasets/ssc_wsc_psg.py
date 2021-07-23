@@ -177,6 +177,7 @@ class SscWscPsgDataset(Dataset):
         eval_ratio=None,
         balanced_sampling=False,
         sequence_length=5,
+        max_eval_records=1000,
         n_channels=5,
     ):
         super().__init__()
@@ -192,6 +193,7 @@ class SscWscPsgDataset(Dataset):
         self.eval_ratio = eval_ratio
         self.balanced_sampling = balanced_sampling
         self.sequence_length = sequence_length
+        self.max_eval_records = max_eval_records
         self.n_channels = n_channels
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
         # self.data = {r: [] for r in self.records}
@@ -282,7 +284,7 @@ class SscWscPsgDataset(Dataset):
         n_records = len(self.records)
         self.shuffle_records()
         # if self.cv is None:
-        n_eval = int(n_records * self.eval_ratio)
+        n_eval = min(int(n_records * self.eval_ratio), self.max_eval_records)
         n_train = n_records - n_eval
         train_idx = np.arange(n_eval, n_records)
         eval_idx = np.arange(0, n_eval)
@@ -517,6 +519,7 @@ class SscWscDataModule(pl.LightningDataModule):
         adjustment=None,
         balanced_sampling=False,
         sequence_length=5,
+        max_eval_records=1000,
         **kwargs,
     ):
         super().__init__()
@@ -532,6 +535,7 @@ class SscWscDataModule(pl.LightningDataModule):
         self.n_workers = n_workers
         self.scaling = scaling
         self.sequence_length = sequence_length
+        self.max_eval_records = max_eval_records
         self.n_channels = kwargs["n_channels"]
         self.data = {"train": data_dir, "test": "data/test/raw"}
         self.dataset_params = dict(
@@ -544,6 +548,7 @@ class SscWscDataModule(pl.LightningDataModule):
             scaling=self.scaling,
             adjustment=self.adjustment,
             sequence_length=self.sequence_length,
+            max_eval_records=self.max_eval_records,
             n_channels=self.n_channels,
         )
 
@@ -601,6 +606,7 @@ class SscWscDataModule(pl.LightningDataModule):
         dataset_group.add_argument("--cv", default=None, type=int)
         dataset_group.add_argument("--cv_idx", default=None, type=int)
         dataset_group.add_argument("--balanced_sampling", default=False, action="store_true")
+        dataset_group.add_argument("--max_eval_records", default=500, type=int)
         dataset_group.add_argument(
             "--sequence_length",
             default=5,
