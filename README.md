@@ -69,6 +69,21 @@ Selected:  ['EMG1']
 ```
 The script will output the name and count of each channel label available in the data directory, and the user will then use numerical values to choose the correct channel mappings for each category.
 Notice that a category can contain multiple indices, which are space-separated and ordered (highest priority channel name should be the first element, and so on).
+
+#### EDF loading routines
+The channel mapping `JSON` must be linked to the data cohort identifier by adding a function in `utils/edf_utils.py` that loads the relevant channels given the correct mapping defined above.
+The following template function is supplied in `edf_utils.py`:
+```python
+def load_edf_template(filepath, fs):
+
+    with open("path/to/mychannelmapping.json") as json_file:
+        channel_dict = json.load(json_file)
+
+    return load_edf(filepath, fs, channel_dict)
+```
+The user is responsible for adding a custom `load_edf_X` function based on the template, where `<path/to/mychannelmapping.json>` has been changed to the correct path.
+When the function has been added, add a reference to the function in the `edf_read_fns` dictionary in `utils/__init__.py`.
+
 ### Training
 
 ### Testing
