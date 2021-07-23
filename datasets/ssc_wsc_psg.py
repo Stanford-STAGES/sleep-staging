@@ -268,14 +268,15 @@ class SscWscPsgDataset(Dataset):
         self.cb_weights_norm = (1 - self.beta) / (1 - self.beta ** (cum_class_counts / cum_class_counts.min()))
         self.effective_samples = 1 / self.cb_weights_norm
         self.cb_weights = self.cb_weights_norm * self.n_classes / self.cb_weights_norm.sum()
-        print("")
-        print(f"Class counts: {cum_class_counts}")
-        print(f"Beta: {self.beta}")
-        print(f"CB weights norm: {self.cb_weights_norm}")
-        print(f"Effective samples: {self.effective_samples}")
-        print(f"CB weights: {self.cb_weights}")
-        print("")
-        print("Finished loading data")
+        if int(os.environ.get("LOCAL_RANK", 0)) == 0:
+            print("")
+            print(f"Class counts: {cum_class_counts}")
+            print(f"Beta: {self.beta}")
+            print(f"CB weights norm: {self.cb_weights_norm}")
+            print(f"Effective samples: {self.effective_samples}")
+            print(f"CB weights: {self.cb_weights}")
+            print("")
+            print("Finished loading data")
 
     def shuffle_records(self):
         random.shuffle(self.records)
