@@ -138,7 +138,7 @@ def batch_start_jobs(args):
             # if idx < 8:
             content = f"""#!/bin/bash
 #
-#SBATCH --job-name="s_{idx}"
+#SBATCH --job-name="{cohort}_{idx}"
 #SBATCH -p mignot,owners,normal
 #SBATCH --time=05:00:00
 #SBATCH --cpus-per-task=2
