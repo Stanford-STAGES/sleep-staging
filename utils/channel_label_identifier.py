@@ -26,6 +26,10 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from joblib import delayed
+
+from utils import ParallelExecutor
+
 try:
     import mne
 except:
@@ -114,10 +118,18 @@ def getAllChannelLabelsWithCounts(edfFiles):
     if num_edfs == 0:
         label_list = []
     else:
-        label_list = []
-        for edfFile in tqdm(edfFiles):
-            [label_list.append(l) for l in getChannelLabels(edfFile)]
-        label_set_counts = Counter(label_list)
+
+        def func(fp):
+            return getChannelLabels(fp)
+
+        output = ParallelExecutor(n_jobs=-1, prefer="threads")(total=len(edfFiles))(
+            delayed(func)(edfFile) for edfFile in edfFiles
+        )
+        label_set_counts = Counter([l2 for l1 in output for l2 in l1])
+        # label_list = []
+        # for edfFile in tqdm(edfFiles):
+        #     [label_list.append(l) for l in getChannelLabels(edfFile)]
+        # label_set_counts = Counter(label_list)
     return label_set_counts, num_edfs
 
 
