@@ -97,6 +97,7 @@ with open("utils/filter_coefficients/filter_specs.json", "r") as json_file:
 with open("utils/channel_dicts/channel_names.txt", "r") as txt_file:
     ch_names = [re.split(", ", line.rstrip()) for line in txt_file]
 
+
 def get_quiet_channel(channels, fs, meanV, covM):
     noise = np.zeros(len(channels))
     for idx, ch in enumerate(channels):
@@ -116,6 +117,7 @@ def channel_noise_level(channel, fs, meanV, covM):
         return np.mean(noise_vec)
     else:
         return np.inf
+
 
 def get_alternative_names(ch, labels):
 
@@ -325,7 +327,7 @@ def load_signals(edf_file, fs, cohort, encoding):
     # if cohort == 'jcts':
     temp_data, cFs, channel_labels = edf_read_fns[cohort](edf_file, fs)
 
-    if encoding == 'cc':  # TODO: this is broken
+    if encoding == "cc":  # TODO: this is broken
         # Resampling data. Filter coefficients are pulled from MATLAB
         data = [[]] * temp_data.shape[0] if not isinstance(temp_data, list) else [[]] * len(temp_data)
         for idx, orig_fs in enumerate(cFs):
@@ -348,7 +350,7 @@ def load_signals(edf_file, fs, cohort, encoding):
                         )
             else:
                 data[idx] = temp_data[idx]
-    elif encoding == 'raw':
+    elif encoding == "raw":
         # Resample data using polyphase filtering
         data = [[]] * temp_data.shape[0] if not isinstance(temp_data, list) else [[]] * len(temp_data)
         for idx, orig_fs in enumerate(cFs):
