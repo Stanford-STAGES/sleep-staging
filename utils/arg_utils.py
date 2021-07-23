@@ -95,6 +95,11 @@ def get_args(print_args=False):
                 args.save_dir = os.path.join("experiments", args.model_type, args.model_name,)
             else:
                 args.save_dir = os.path.join("experiments", args.model_type, args.model_name, args.name,)
+
+        if int(os.environ.get("LOCAL_RANK", 0)) == 0:
+            os.makedirs(args.save_dir)
+    else:
+        args.save_dir = args.resume_from_checkpoint if os.path.isdir(args.resume_from_checkpoint) else os.path.dirname(args.resume_from_checkpoint)
     # os.makedirs(args.save_dir, exist_ok=True)
     # args.save_dir.mkdir(parents=True, exist_ok=True)
 
