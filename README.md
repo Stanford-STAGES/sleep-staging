@@ -84,6 +84,7 @@ def load_edf_template(filepath, fs):
 The user is responsible for adding a custom `load_edf_X` function based on the template, where `<path/to/mychannelmapping.json>` has been changed to the correct path.
 When the function has been added, add a reference to the function in the `edf_read_fns` dictionary in `utils/__init__.py`.
 
+<!--
 ### Training
 
 ### Testing
