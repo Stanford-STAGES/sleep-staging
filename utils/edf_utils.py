@@ -1,3 +1,4 @@
+import os
 import json
 
 import numpy as np
@@ -27,8 +28,8 @@ def load_edf(filepath, fs, channel_dict):
     missing_occipital = all([channels_to_load["O1"] is None, channels_to_load["O2"] is None])
     missing_eog = all([channels_to_load["EOGL"] is None, channels_to_load["EOGR"] is None])
     missing_emg = all([channels_to_load["EMG"] is None])
-    if any([missing_central, missing_occipital, missing_eog, missing_emg]):
-        raise MissingSignalsError(os.path.basename(filepath), available_channels)
+    # if any([missing_central, missing_occipital, missing_eog, missing_emg]):
+    #     raise MissingSignalsError(os.path.basename(filepath), available_channels)
 
     # Preload
     data = [[]] * len(channel_dict["categories"])
@@ -137,6 +138,82 @@ def load_edf_jcts(filepath, fs):
 def load_edf_wsc(filepath, fs):
 
     with open("utils/channel_dicts/channels_wsc.json") as json_file:
+        channel_dict = json.load(json_file)
+
+    return load_edf(filepath, fs, channel_dict)
+
+
+def load_edf_cfs(filepath, fs):
+
+    with open("utils/channel_dicts/channels_cfs.json") as json_file:
+        channel_dict = json.load(json_file)
+        channel_dict.pop("F3", None)
+        channel_dict.pop("F4", None)
+        channel_dict["categories"].remove("F3")
+        channel_dict["categories"].remove("F4")
+
+    return load_edf(filepath, fs, channel_dict)
+
+
+def load_edf_chat(filepath, fs):
+
+    with open("utils/channel_dicts/channels_chat.json") as json_file:
+        channel_dict = json.load(json_file)
+        channel_dict.pop("F3", None)
+        channel_dict.pop("F4", None)
+        channel_dict["categories"].remove("F3")
+        channel_dict["categories"].remove("F4")
+
+    return load_edf(filepath, fs, channel_dict)
+
+
+def load_edf_mesa(filepath, fs):
+
+    with open("utils/channel_dicts/channels_mesa.json") as json_file:
+        channel_dict = json.load(json_file)
+        channel_dict.pop("F3", None)
+        channel_dict.pop("F4", None)
+        channel_dict["categories"].remove("F3")
+        channel_dict["categories"].remove("F4")
+
+    return load_edf(filepath, fs, channel_dict)
+
+
+def load_edf_mros(filepath, fs):
+
+    with open("utils/channel_dicts/channels_mros.json") as json_file:
+        channel_dict = json.load(json_file)
+        channel_dict.pop("F3", None)
+        channel_dict.pop("F4", None)
+        channel_dict["categories"].remove("F3")
+        channel_dict["categories"].remove("F4")
+
+    return load_edf(filepath, fs, channel_dict)
+
+
+def load_edf_shhs(filepath, fs):
+
+    with open("utils/channel_dicts/channels_shhs.json") as json_file:
+        channel_dict = json.load(json_file)
+        channel_dict.pop("F3", None)
+        channel_dict.pop("F4", None)
+        channel_dict["categories"].remove("F3")
+        channel_dict["categories"].remove("F4")
+
+    return load_edf(filepath, fs, channel_dict)
+
+
+def load_edf_ssc(filepath, fs):
+
+    with open("utils/channel_dicts/channels_ssc.json") as json_file:
+        channel_dict = json.load(json_file)
+
+    return load_edf(filepath, fs, channel_dict)
+
+
+def load_edf_template(filepath, fs):
+
+    with open("path/to/mychannelmapping.json") as json_file:
         channel_dict = json.load(json_file)
 
     return load_edf(filepath, fs, channel_dict)

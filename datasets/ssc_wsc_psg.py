@@ -177,6 +177,7 @@ class SscWscPsgDataset(Dataset):
         eval_ratio=None,
         balanced_sampling=False,
         sequence_length=5,
+        n_channels=5,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -191,6 +192,7 @@ class SscWscPsgDataset(Dataset):
         self.eval_ratio = eval_ratio
         self.balanced_sampling = balanced_sampling
         self.sequence_length = sequence_length
+        self.n_channels = n_channels
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
         # self.data = {r: [] for r in self.records}
         self.index_to_record = []
@@ -206,9 +208,10 @@ class SscWscPsgDataset(Dataset):
         # self.loaded_record = None
         # self.current_position = None
         # data = load_psg_h5_data(os.path.join(self.data_dir, self.records[0]))
-        self.cache_dir = "data/.cache"
+        self.cache_dir = "data/.cache_large"
         memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
         get_data = memory.cache(initialize_record)
+        # get_data = initialize_record
 
         # Get information about the data
         print(f"Loading mmap data using {n_jobs} workers:")
@@ -402,7 +405,11 @@ class SscWscPsgDataset(Dataset):
         #         # plt.xlim([])
         #         plt.savefig("results/synthetic_spindles.png", dpi=300, bbox_inches="tight", pad_inches=0)
         #         utils.plot_data(x.T, t.T, save_path="more_spindles.png")
-
+        assert x.shape[0] >= self.n_channels, f"Requested {self.n_channels}, PSG only has {x.shape[0]}!"
+        if self.n_channels == 4:
+            x = np.concatenate((x[np.newaxis, 0], x[-3:]), axis=0)  # only use 1 EEG
+        elif self.n_channels == 5:
+            pass  # H5 saves 5 channels per default. TODO: Change this when pipeline iis updated to include more channels, e.g. frontals.
         return x, t, current_record, current_sequence, stable_sleep
 
     def __str__(self):
@@ -525,6 +532,7 @@ class SscWscDataModule(pl.LightningDataModule):
         self.n_workers = n_workers
         self.scaling = scaling
         self.sequence_length = sequence_length
+        self.n_channels = kwargs["n_channels"]
         self.data = {"train": data_dir, "test": "data/test/raw"}
         self.dataset_params = dict(
             # data_dir=self.data_dir,
@@ -536,6 +544,7 @@ class SscWscDataModule(pl.LightningDataModule):
             scaling=self.scaling,
             adjustment=self.adjustment,
             sequence_length=self.sequence_length,
+            n_channels=self.n_channels,
         )
 
     def setup(self, stage="fit"):

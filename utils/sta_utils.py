@@ -2,6 +2,8 @@ import os
 
 import numpy as np
 
+from utils.parse_xml_nsrr import parse_hypnogram
+
 
 def load_hypnogram_ihc(sta_file):
 
@@ -118,6 +120,16 @@ def load_hypnogram_default(sta_file):
     return hyp
 
 
+def load_hypnogram_nsrr(sta_file):
+
+    xml_file = sta_file.split(".")[0] + "-nsrr.xml"
+
+    df_hypnogram = parse_hypnogram(xml_file, "xml")
+    hypnogram = df_hypnogram["label"].values
+
+    return np.asarray(hypnogram)[:, np.newaxis]
+
+
 hypnogram_read_fns = {
     "dhc": load_hypnogram_dhc,
     "jcts": load_hypnogram_jcts,
@@ -126,6 +138,11 @@ hypnogram_read_fns = {
     "ssc": load_hypnogram_default,
     "khc": load_hypnogram_khc,
     "ahc": None,
+    "cfs": load_hypnogram_nsrr,
+    "chat": load_hypnogram_nsrr,
+    "mesa": load_hypnogram_nsrr,
+    "mros": load_hypnogram_nsrr,
+    "shhs": load_hypnogram_nsrr,
     "stages-stnf": None,
     "stages-bogn": None,
     "stages-gs": None,

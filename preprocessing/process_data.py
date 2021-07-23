@@ -375,13 +375,20 @@ def load_signals(edf_file, fs, cohort, encoding):
     # Select Central channel, index 0 in meanV and covM
     keep_idx_central = get_quiet_channel([data[j] for j in central_list], fs, meanV[0], covM[0])
     # Select occipital channel, index 1 in meanV and covM
-    keep_idx_occipital = get_quiet_channel([data[j] for j in occipital_list], fs, meanV[1], covM[1])
+    if not all([isinstance(data[o], list) for o in occipital_list]):  # Some cohorts do not have occipital
+        keep_idx_occipital = get_quiet_channel([data[j] for j in occipital_list], fs, meanV[1], covM[1])
+    else:
+        keep_idx_occipital = None
     # Select only kept channels
     data = np.concatenate(
         [
-            data[central_list[keep_idx_central]][np.newaxis, :],
-            data[occipital_list[keep_idx_occipital]][np.newaxis, :],
-            data[-3:],
+            v
+            for v in [
+                data[central_list[keep_idx_central]][np.newaxis, :],
+                data[occipital_list[keep_idx_occipital]][np.newaxis, :] if keep_idx_occipital is not None else None,
+                data[-3:],
+            ]
+            if v is not None
         ]
     )
 
@@ -585,7 +592,6 @@ def load_signals(edf_file, fs, cohort, encoding):
     return data
 
 
-
 def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc"):
     missing_hyp = []
     missing_sigs = []
@@ -678,7 +684,7 @@ def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc
         # Filter signals
         eegFilter = signal.butter(2, [0.3, 35], btype="bandpass", output="sos", fs=fs)
         emgFilter = signal.butter(4, 10, btype="highpass", output="sos", fs=fs)
-        sig[:4] = signal.sosfiltfilt(eegFilter, sig[:4])
+        sig[:-1] = signal.sosfiltfilt(eegFilter, sig[:-1])
         sig[-1] = signal.sosfiltfilt(emgFilter, sig[-1])
         sig = sig.astype(np.float32)
         # fmt: off
@@ -691,8 +697,12 @@ def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc
 
         # Design labels
         labels = np.zeros((5, hyp.shape[0], hyp.shape[1])).astype(np.uint32)
-        for j in range(5):
-            labels[j, hyp == j + 1] = 1
+        if cohort in ['cfs', 'chat', 'mesa', 'mros', 'shhs']:
+            for j in range(5):
+                labels[j, hyp == j] = 1
+        else:
+            for j in range(5):
+                labels[j, hyp == j + 1] = 1
 
         # Mask vector to account for unknown stages (7), or anything else that should be excluded in the loss calculations
         Z = np.full(hyp.shape, False, dtype=bool)
