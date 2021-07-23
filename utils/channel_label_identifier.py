@@ -20,6 +20,7 @@
 # @author Hyatt Moore
 # @date 2/20/2018
 
+import argparse
 import json
 import sys
 from collections import Counter
@@ -134,14 +135,14 @@ def printUsage(toolName):
 
 
 def run(args):
-    path2check = args[0]
-    json_filename = args[1]
-    jsonFileOut = json_filename
+    path2check = args.data_dir
+    json_filename = args.json_out
+    # jsonFileOut = json_filename
     # jsonFileOut = Path('./src/config/signal_labels').joinpath(json_filename)
     # jsonFileOut = Path(path2check).joinpath(json_filename)
     # jsonFileOut = Path('/home/alexno/Documents/utils').joinpath(JSON_FILENAME)
     # jsonFileOut = Path(path2check).joinpath(JSON_FILENAME)
-    channelsToID = args[2:]
+    channelsToID = args.channels
 
     edfFiles = getEDFFilenames(path2check)
     num_edfs = len(edfFiles)
@@ -179,18 +180,27 @@ def run(args):
                 print("Selected: ", selectedLabels)
                 toFile[ch] = selectedLabels
 
-            with open(jsonFileOut, "w") as json_file:
+            with open(json_filename, "w") as json_file:
                 json.dump(toFile, json_file, indent=4, sort_keys=True)
             # jsonStr = json.dumps(toFile, indent=4, sort_keys=True)
             # jsonFileOut.write_text(jsonStr)
             print(json.dumps(toFile))
             print()
-            print("JSON data written to file:", jsonFileOut)
+            print("JSON data written to file:", json_filename)
 
 
 if __name__ == "__main__":
     # if number of input arguments is none
+    # usage_str = "Usage:\n\t", sys.argv[0], " <pathname to search> < <channel category> {<channel category>}")
+    # print("Example:\n\t", toolName, " . C3 C4"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--data_dir", required=True, type=str, help="Location of EDF(s) to check")
+    parser.add_argument(
+        "-o", "--json_out", required=True, type=str, help="Location of the output JSON file containing channel mappings"
+    )
+    parser.add_argument("-c", "--channels", required=True, nargs="+", help="List of channels to map")
+    args = parser.parse_args()
     if len(sys.argv) < 2:
         printUsage(sys.argv[0])
     else:
-        run(sys.argv[1:])
+        run(args)
