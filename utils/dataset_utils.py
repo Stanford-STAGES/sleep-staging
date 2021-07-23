@@ -7,6 +7,8 @@ def get_data(args):
     dm.setup()
 
     try:
+        args.n_train = len(dm.train.records)
+        args.n_eval = len(dm.eval.records)
         args.cb_weights = dm.train.dataset.cb_weights
     except AttributeError:
         pass
