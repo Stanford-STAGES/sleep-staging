@@ -86,6 +86,11 @@ When the function has been added, add a reference to the function in the `edf_re
 
 #### Hypnogram loading routines
 Similar to the EDF loading, the user is also responsible for ensuring correct loading of hypnogram files.
+A `load_hypnogram_default()` function is supplied in `utils/sta_utils.py` (pending namechange).
+This can be used as is, or modified to custom filetypes.
+Importantly, any custom hypnogram loading routine should return a Numpy array of shape `(N,)` containing integers mapping from `{Wake, N1, N2, N3, REM[, MOVEMENT/UNKNOWN]}` to `{1, 2, 3, 4, 5[, 7]}` or from `{Wake, S1, S2, S3, S4, REM[, MOVEMENT/UNKNOWN]}` to `{1, 2, 3, 4, 4, 5[, 7]}`.
+
+#### Run data preprocessing
 
 ### Training
 To train a new model, run the following command from the root directory (`~/sleep-staging`):
@@ -95,7 +100,7 @@ python train.py [OPTIONS]
 The `[OPTIONS]` can be a list of input arguments controlling various aspects of the model training, such as the datamodule, model architecture, optimizer, etc. as well as all the flags listed in the [PyTorch Lightning Trainer API](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#trainer-flags).
 The full list of optional flags can be shown by running `python train.py --help`
 
-#### Example training run
+<!-- #### Example training run -->
 <!--
 ### Testing
 
