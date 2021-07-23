@@ -84,9 +84,19 @@ def load_edf_template(filepath, fs):
 The user is responsible for adding a custom `load_edf_X` function based on the template, where `<path/to/mychannelmapping.json>` has been changed to the correct path.
 When the function has been added, add a reference to the function in the `edf_read_fns` dictionary in `utils/__init__.py`.
 
-<!--
-### Training
+#### Hypnogram loading routines
+Similar to the EDF loading, the user is also responsible for ensuring correct loading of hypnogram files.
 
+### Training
+To train a new model, run the following command from the root directory (`~/sleep-staging`):
+```
+python train.py [OPTIONS]
+```
+The `[OPTIONS]` can be a list of input arguments controlling various aspects of the model training, such as the datamodule, model architecture, optimizer, etc. as well as all the flags listed in the [PyTorch Lightning Trainer API](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#trainer-flags).
+The full list of optional flags can be shown by running `python train.py --help`
+
+#### Example training run
+<!--
 ### Testing
 
 ## Citation
