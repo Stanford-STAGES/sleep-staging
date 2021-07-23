@@ -232,35 +232,67 @@ class SscWscPsgDataset(Dataset):
         #     self.data[record] = {'data': d[0], 'target': d[1]}
         self.n_classes = 5
         cum_class_counts = np.zeros(self.n_classes, dtype=np.int64)
-        for record, (hypnogram, sequences_in_file, scaler, stable_sleep, class_counts) in zip(
-            tqdm(self.records, desc="Processing"), data
-        ):
-            # Some sequences are all unstable sleep, which interferes with the loss calculations.
-            # This selects sequences where at least one epoch is sleep.
+
+        # TODO: merge this function into the get_data function
+        def sort_record_data(record, data):
+            hypnogram, _, scaler, stable_sleep, class_counts = data
             select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
-            self.record_indices[record] = select_sequences  # np.arange(sequences_in_file)
-            self.record_class_indices[record] = get_class_sequence_idx(hypnogram, select_sequences)
-            self.index_to_record.extend(
-                [{"record": record, "idx": x} for x in select_sequences]
-            )  # range(sequences_in_file)])
-            # for c in self.index_to_record_class.keys():
-            #     self.index_to_record_class[c].extend(
-            #         [
-            #             {
-            #                 "idx": [
-            #                     idx
-            #                     for idx, i2r in enumerate(self.index_to_record)
-            #                     if i2r["idx"] == x and record == i2r["record"]
-            #                 ][0],
-            #                 "record": record,
-            #                 "record_idx": x,
-            #             }
-            #             for x in self.record_class_indices[record][c]
-            #         ]
+            # if len(class_counts) < 5:
+            #     print(
+            #         f"Hypnogram count error | Record: {record} | Hypnogram shape: {hypnogram.shape} | Unique classes: {np.unique(hypnogram)} | Class counts: {class_counts}"
             #     )
-            self.scalers[record] = scaler
-            self.stable_sleep[record] = stable_sleep
-            cum_class_counts += class_counts
+            return dict(
+                record_indices=(record, select_sequences),
+                record_class_indices=(record, get_class_sequence_idx(hypnogram, select_sequences)),
+                index_to_record=[{"record": record, "idx": x} for x in select_sequences],
+                scalers=(record, scaler),
+                stable_sleep=(record, stable_sleep),
+                cum_class_counts=(record, class_counts),
+            )
+
+        sorted_data = ParallelExecutor(n_jobs=-1, prefer="threads")(total=len(self.records), desc="Processing")(
+            delayed(sort_record_data)(record, d) for record, d in zip(self.records, data)
+        )
+        self.record_indices = dict([s["record_indices"] for s in sorted_data])
+        self.record_class_indices = dict([s["record_class_indices"] for s in sorted_data])
+        self.scalers = dict([s["scalers"] for s in sorted_data])
+        self.stable_sleep = dict([s["stable_sleep"] for s in sorted_data])
+        self.index_to_record = [sub for s in sorted_data for sub in s["index_to_record"]]
+        cum_class_counts = sum([s["cum_class_counts"][1] for s in sorted_data if len(s["cum_class_counts"][1]) == 5])
+        # for record, (hypnogram, sequences_in_file, scaler, stable_sleep, class_counts) in zip(
+        #     tqdm(self.records, desc="Processing"), data
+        # ):
+        #     # Some sequences are all unstable sleep, which interferes with the loss calculations.
+        #     # This selects sequences where at least one epoch is sleep.
+        #     select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
+        #     self.record_indices[record] = select_sequences  # np.arange(sequences_in_file)
+        #     self.record_class_indices[record] = get_class_sequence_idx(hypnogram, select_sequences)
+        #     self.index_to_record.extend(
+        #         [{"record": record, "idx": x} for x in select_sequences]
+        #     )  # range(sequences_in_file)])
+        #     # for c in self.index_to_record_class.keys():
+        #     #     self.index_to_record_class[c].extend(
+        #     #         [
+        #     #             {
+        #     #                 "idx": [
+        #     #                     idx
+        #     #                     for idx, i2r in enumerate(self.index_to_record)
+        #     #                     if i2r["idx"] == x and record == i2r["record"]
+        #     #                 ][0],
+        #     #                 "record": record,
+        #     #                 "record_idx": x,
+        #     #             }
+        #     #             for x in self.record_class_indices[record][c]
+        #     #         ]
+        #     #     )
+        #     self.scalers[record] = scaler
+        #     self.stable_sleep[record] = stable_sleep
+        #     try:
+        #         cum_class_counts += class_counts
+        #     except:
+        #         print(
+        #             f"Record {record} has hypnogram of shape: {hypnogram.shape} with the following unique values: {np.unique(hypnogram)}"
+        #         )
 
         # Define the class-balanced weights. We normalize the class counts to the lowest value as the numerator
         # otherwise will dominate the expression
