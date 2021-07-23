@@ -470,7 +470,8 @@ class SscWscPsgSubset(Dataset):
         return out
 
     def __get_subset_indices(self):
-        t = list(map(lambda x: x["record"] in self.records, self.dataset.index_to_record))
+        records = set(self.records)
+        t = list(map(lambda x: x["record"] in records, self.dataset.index_to_record))
         return list(compress(range(len(t)), t))
 
     def __getitem__(self, idx):
