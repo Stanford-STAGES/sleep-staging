@@ -21,12 +21,14 @@ The data generation pipeline requires at least/most 5/11 distinct channels.
 The distinction follows in that only 5 referenced channels are required (1 central EEG, 2 EOG, 1 EMG), but in reality, many EDFs contain unreferenced channels.
 The following command ensures that all relevant channels are mapped to a correct category
 ```
-python -m utils.channel_label_identifier -d <data_dir> -o <output_JSON> -c C3 C4 O1 O2 A1 A2 EOGL EOGR EMG EOGRef EMGRef
+python -m utils.channel_label_identifier -d <data_dir> \
+                                         -o <output_JSON> \
+                                         -c C3 C4 O1 O2 EOGL EOGR EMG A1 A2 EOGRef EMGRef
 ```
 The script will read through the headers of all available EDFs in `data_dir` and then the user will select channels that correspond to a given category given by the `-c` argument.
 Shown below is an example of using the command to map the channels from the Cleveland Family Study data obtained from [NSRR](https://sleepdata.org):
 ```
-> python -m utils.channel_label_identifier -d data/cfs/edf -o cfs.json -c C3 C4 O1 O2 A1 A2 EOGL EOGR EMG EOGRef EMGRef
+> python -m utils.channel_label_identifier -d data/cfs/edf -o cfs.json -c C3 C4 O1 O2 EOGL EOGR EMG A1 A2 EOGRef EMGRef
 Checking data/cfs/edf for edf files.
 Removing any MSLT studies.
 100%|████████████████████████████████████████████████████████████████████████████████████████████████████| 730/730 [02:00<00:00,  6.07it/s]
