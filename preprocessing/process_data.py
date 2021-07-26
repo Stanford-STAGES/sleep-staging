@@ -1,44 +1,42 @@
 import argparse
 import json
-import multiprocessing
+import logging
 import os
 import random
 import re
+import sys
 from glob import glob
 
-import mne
 import numpy as np
 import pandas as pd
 import scipy.io as sio
 import skimage
 
-from h5py import File
 from scipy import signal
 from scipy.fft import fft
 from scipy.fft import fftshift
 from scipy.fft import ifft
 from tqdm import tqdm
 
+from utils.h5_utils import save_h5
 from utils import edf_read_fns
 from utils import load_scored_data
-from utils.errors import MissingHypnogramError
-from utils.errors import MissingSignalsError
-from utils.errors import ReferencingError
 
 os.chdir("/home/users/alexno/sleep-staging")
-nthread = multiprocessing.cpu_count()
 
 cc_sizes = [2, 2, 4, 4, 0.4]
 cc_overlap = 0.25
 
 try:
     df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
-except:
+except FileNotFoundError:
     df = pd.read_csv("data_master.csv")
 
 noiseM = sio.loadmat("preprocessing/noiseM.mat", squeeze_me=True, mat_dtype=False)["noiseM"]
 meanV = noiseM["meanV"].item()
 covM = noiseM["covM"].item()
+
+# logger = logging.getLogger(__package__)
 
 # Filter specifications for resampling from MATLAB
 with open("utils/filter_coefficients/filter_specs.json", "r") as json_file:
@@ -152,9 +150,7 @@ def encode_data(x1, x2, dim, slide, fs):
     C = fftshift(
         np.real(
             ifft(
-                fft(D1, dim * 2 - 1, axis=0, workers=-1) * np.conj(fft(D2, dim * 2 - 1, axis=0, workers=-1)),
-                axis=0,
-                workers=-2,
+                fft(D1, dim * 2 - 1, axis=0, workers=-1) * np.conj(fft(D2, dim * 2 - 1, axis=0, workers=-1)), axis=0, workers=-2,
             )
         ),
         axes=0,
@@ -177,7 +173,7 @@ def encode_data(x1, x2, dim, slide, fs):
 
 def load_signals(edf_file, fs, cohort, encoding):
 
-    header = mne.io.read_raw_edf(edf_file)
+    logging.info("\tLoading EDF header")
     temp_data, cFs, channel_labels = edf_read_fns[cohort](edf_file, fs)
 
     if encoding == "cc":  # TODO: this is broken
@@ -204,6 +200,7 @@ def load_signals(edf_file, fs, cohort, encoding):
             else:
                 data[idx] = temp_data[idx]
     elif encoding == "raw":
+        logging.info(f"\tResampling to {fs} Hz")
         # Resample data using polyphase filtering
         data = [[]] * temp_data.shape[0] if not isinstance(temp_data, list) else [[]] * len(temp_data)
         for idx, orig_fs in enumerate(cFs):
@@ -220,16 +217,20 @@ def load_signals(edf_file, fs, cohort, encoding):
             rem = len(data[idx]) % (fs * 30)
             # Otherwise, if rem == 0, the following results in an empty array
             if rem > 0:
+                logging.info(f"\tTrimming ch {idx} from {len(data[idx])} to {len(data[idx]) - rem}")
                 data[idx] = data[idx][:-rem]
 
     # Select channels based on noise levels
     central_list = [0, 1]
     occipital_list = [2, 3]
+    descr = ["left", "right"]
     # Select Central channel, index 0 in meanV and covM
     keep_idx_central = get_quiet_channel([data[j] for j in central_list], fs, meanV[0], covM[0])
+    logging.info(f"\tKeeping {descr[keep_idx_central]} central EEG channel")
     # Select occipital channel, index 1 in meanV and covM
     if not all([isinstance(data[o], list) for o in occipital_list]):  # Some cohorts do not have occipital
         keep_idx_occipital = get_quiet_channel([data[j] for j in occipital_list], fs, meanV[1], covM[1])
+        logging.info(f"\tKeeping {descr[keep_idx_central]} occipital EEG channel")
     else:
         keep_idx_occipital = None
     # Select only kept channels
@@ -248,15 +249,25 @@ def load_signals(edf_file, fs, cohort, encoding):
     return data
 
 
-def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc"):
-    missing_hyp = []
-    missing_sigs = []
+def ensure_dir(dir_path):
+    os.makedirs(dir_path, exist_ok=True)
+    logging.info(f"Creating directory: {dir_path}")
 
+
+def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc"):
+
+    logging.info("\tLoading hypnogram")
     hyp = load_scored_data(current_file.split(".")[0], cohort=cohort)
     if hyp is None:
-        raise MissingHypnogramError(os.path.basename(current_file))
+        logging.info("\tUnable to find hypnogram file!")
+        return
+    logging.info(f"\tHypnogram length: {len(hyp)}")
+    logging.info(f"\tHypnogram classes: {np.unique(hyp)}")
+    # raise MissingHypnogramError(os.path.basename(current_file))
 
+    logging.info("\tLoading signals from PSG file")
     sig = load_signals(current_file, fs, cohort, encoding)
+    logging.info(f"\tPSG data shape: {sig.shape}")
     hyp = hyp[: len(sig[0]) // (fs * 30), :]
 
     if encoding == "cc":
@@ -329,6 +340,7 @@ def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc
     elif encoding == "raw":
 
         # Filter signals
+        logging.info(f"\tFilter signal data")
         eegFilter = signal.butter(2, [0.3, 35], btype="bandpass", output="sos", fs=fs)
         emgFilter = signal.butter(4, 10, btype="highpass", output="sos", fs=fs)
         sig[:-1] = signal.sosfiltfilt(eegFilter, sig[:-1])
@@ -340,6 +352,7 @@ def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc
         C = np.stack([rolling_window_nodelay(s, 30 * fs, 30 * fs) for s in sig])
 
         # Design labels
+        logging.info(f'\tCreating one-hot encoding hypnogram')
         labels = np.zeros((5, hyp.shape[0], hyp.shape[1])).astype(np.uint32)
         if cohort in ['cfs', 'chat', 'mesa', 'mros', 'shhs']:
             for j in range(5):
@@ -356,6 +369,7 @@ def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc
         index = rolling_window_nodelay(np.arange(C.shape[-1]), seq_len, seq_len - overlap).T
 
         # Create stacked arrays
+        logging.info('\tCreating stacked arrays')
         M = np.stack([C[:, :, j] for j in index], axis=0)
         M = np.swapaxes(M, 2, 3).reshape((M.shape[0], M.shape[1], -1))
         L = np.stack([labels[:, j] for j in index], axis=0).repeat(30, axis=2)  # (Number of sequences, number of classes, hypnogram value for each second in sequence)
@@ -367,146 +381,148 @@ def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc
     return M, L, W, Z, None, None
 
 
+def get_all_filenames(data_dirs):
+    listF = []
+    for directory in data_dirs:
+        logging.info(f"Looking for PSG files in {directory}...")
+        listT = sorted(glob(os.path.join(directory, "*.[EeRr][DdEe][FfCc]"))) or sorted(
+            glob(os.path.join(directory, "**/*.[EeRr][DdEe][FfCc]"))
+        )
+        logging.info(f"Found {len(listT)} files.")
+        listF += listT
+    return listF
+
+
+def assign_files(listF, cohort, test=None, list_slice=None):
+    not_listed = []
+    listed_as_train = []
+    listed_as_test = []
+    logging.info("Assigning files (optionally based on data master)")
+    for current_file in tqdm(listF):
+        if cohort == "ihc":
+            current_fid = os.path.basename(current_file).split(".")[0][:5]
+            id_col = "ID_Ling"
+        else:
+            current_fid = os.path.basename(current_file).split(".")[0]
+            id_col = "FileID"
+        # Some of the KHC ID's have a prepended 0, this removes it
+        if (cohort == "khc") and (df[df[id_col] == current_fid].empty and not df[df[id_col] == current_fid.lstrip("0")].empty):
+            current_fid = current_fid.lstrip("0")
+        # The subject is not in the overview file
+        if df[df[id_col] == current_fid].empty:
+            not_listed.append(current_file)
+        elif (df[df[id_col] == current_fid]["Sleep scoring training data"] == 1).bool():
+            # elif (not (df.query(f'ID == "{current_fid}"')["Sleep scoring training data"] == 1).bool()) or (df.query(f'ID_Ling == "{current_fid}"')["Sleep scoring training data"] == 1).bool():
+            listed_as_train.append(current_file)
+        # elif (df.query(f'ID == "{current_fid}"')["Sleep scoring test data"] == 1).bool() or (df.query()).bool():
+        #     listed_as_test.append(current_file)
+        else:
+            listed_as_test.append(current_file)
+            # logging.info(f"Hmm... Something is wrong with {current_file}!")
+            # something_wrong.append(current_file)
+    original_list = listF
+    if test:
+        if cohort in ["ihc", "dhc", "ahc"]:  # IHC data should only be placed in test
+            listF = listed_as_test + not_listed
+        else:
+            if listed_as_test:
+                listF = listed_as_test
+            else:
+                listF = not_listed
+    else:
+        listF = not_listed + listed_as_train
+
+    return listF[list_slice] if list_slice else listF
+
+
 def process_data(args):
 
+    # Seed everything
     random.seed(42)
     np.random.seed(42)
 
-    data_stack = None
-
-    # If multiple data folders are given (comma-delimiter)
-    data_dirs = args.data_dir.split(",")
-
+    # Parse args
     fs = args.fs
-    save_dir = args.save_dir
+    cohort = args.cohort
+    out_dir = args.out_dir
     seq_len = args.seq_len
     overlap = args.overlap
     encoding = args.encoding
 
+    # If multiple data folders are given (comma-delimiter)
+    data_dirs = args.data_dir.split(",")
+
+    # Create folders
+    ensure_dir(args.log_dir)
+    logging.info(f"Placing preprocessing logs in {args.log_dir}")
+    logging.info(f"Saving H5 files to {out_dir}")
+    ensure_dir(out_dir)
+
     # Make a list of all the files by looping over all available data-sources
-    listF = []
-    for directory in data_dirs:
-        # random.seed(12345)
-        listT = sorted(glob(os.path.join(directory, "*.[EeRr][DdEe][FfCc]")))
-        listF += listT
+    listF = get_all_filenames(data_dirs)
 
-    not_listed = []
-    listed_as_train = []
-    listed_as_test = []
-    something_wrong = []
-    missing_hyp = []
-    missing_sigs = []
-    for current_file in listF:
-        current_fid = os.path.basename(current_file).split(".")[0]
-        if df.query(
-            f'ID == "{current_fid}"'
-        ).empty:  # The subject is not in the overview file and is automatically added to the train files
-            not_listed.append(current_file)
-        elif (df.query(f'ID == "{current_fid}"')["Sleep scoring training data"] == 1).bool():
-            listed_as_train.append(current_file)
-        elif (df.query(f'ID == "{current_fid}"')["Sleep scoring test data"] == 1).bool():
-            listed_as_test.append(current_file)
-            continue
+    # Get a curated list of files to process
+    listF = assign_files(listF, cohort, args.test, args.slice)
+
+    # Iterate over all files in list
+    logging.info(f"Processing and saving {len(listF)} files")
+    for i, filename in enumerate(tqdm(listF)):
+        logging.info(f"Current file: {filename}")
+        M, L, W, Z, _, _ = process_single_file(filename, fs, seq_len, overlap, cohort, encoding=encoding)
+
+        if cohort in ["dcsm"]:
+            save_name = os.path.join(out_dir, os.path.dirname(filename).split(os.path.sep)[-1] + ".h5")
         else:
-            print(f"Hmm... Something is wrong with {current_file}!")
-            something_wrong.append(current_file)
-            continue
-    list_files = listF
-    listF = not_listed + listed_as_train
-    # random.seed(12345)
-    random.shuffle(listF)
+            save_name = os.path.join(out_dir, os.path.basename(filename).split(".")[0] + ".h5")
+        logging.info(f"\tSaving file to {save_name}")
+        save_h5(save_name, M, L, W, Z)
 
-    save_names = [os.path.join(save_dir, str(np.random.randint(10000000, 19999999)) + ".h5") for _ in range(1000)]
-
-    # Run through all files and generate H5 files containing 300 5 min sequences
-    i = -1
-    pbar = tqdm(range(len(listF)))
-    for i in pbar:
-        # if i < 6:
-        #     continue
-        # while True:
-        # i += 1
-        if i < len(listF):
-            current_file = listF[i]
-
-            # if os.path.basename(current_file).split('.')[0] != 'A1039_3 164125':
-            #     continue
-
-            pbar.set_description(current_file)
-
-            M, L, W, is_missing_hyp, is_missing_sigs = process_single_file(current_file, fs, seq_len, overlap, encoding)
-            if is_missing_hyp:
-                missing_hyp.append(current_file)
-                continue
-            elif is_missing_sigs:
-                missing_sigs.append(current_file)
-                continue
-
-            if data_stack is None:
-                data_stack = M
-                label_stack = L
-                weight_stack = W
-            else:
-                data_stack = np.concatenate([data_stack, M], axis=-1)
-                label_stack = np.concatenate([label_stack, L], axis=-1)
-                weight_stack = np.concatenate([weight_stack, W], axis=-1)
-
-        if data_stack.shape[-1] > 900 | (i == len(listF) - 1 & data_stack.shape[-1] > 300):
-
-            if not os.path.exists(save_dir):
-                os.mkdir(save_dir)
-
-            # Shuffle the data
-            ind = np.random.permutation(data_stack.shape[-1])
-            data_stack = data_stack[:, :, ind]
-            label_stack = label_stack[:, :, ind]
-            weight_stack = weight_stack[:, ind]
-
-            # Save to H5 file
-            save_name = save_names.pop(0)
-            with File(save_name, "w") as f:
-                f.create_dataset("trainD", data=data_stack[:, :, :300])  # (data_stack.shape[0], seq_len, 300))
-                f.create_dataset("trainL", data=label_stack[:, :, :300])  # (data_stack.shape[0], seq_len, 300))
-                f.create_dataset("trainW", data=weight_stack[:, :300])  # (data_stack.shape[0], seq_len, 300))
-
-            # Remove written data from the stack
-            data_stack = np.delete(data_stack, range(300), axis=-1)
-            label_stack = np.delete(label_stack, range(300), axis=-1)
-            weight_stack = np.delete(weight_stack, range(300), axis=-1)
-
-    if not os.path.exists("./txt"):
-        os.mkdir("./txt")
-    with open("txt/not_listed.txt", "w") as f:
-        f.writelines(map(lambda x: x + "\n", not_listed))
-    with open("txt/listed_as_train.txt", "w") as f:
-        f.writelines(map(lambda x: x + "\n", listed_as_train))
-    with open("txt/listed_as_test.txt", "w") as f:
-        f.writelines(map(lambda x: x + "\n", listed_as_test))
-    with open("txt/something_wrong.txt", "w") as f:
-        f.writelines(map(lambda x: x + "\n", something_wrong))
-    with open("txt/missing_hyp.txt", "w") as f:
-        f.writelines(map(lambda x: x + "\n", missing_hyp))
-    with open("txt/missing_sigs.txt", "w") as f:
-        f.writelines(map(lambda x: x + "\n", missing_sigs))
-    with open("txt/processed_files.txt", "w") as f:
-        f.writelines(map(lambda x: x + "\n", listF))
-
+    logging.info("Finished preprocessing all files!")
     return 0
 
 
 if __name__ == "__main__":
 
+    # fmt: off
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", type=str, required=True)
-    parser.add_argument("--save_dir", type=str, required=True)
-    parser.add_argument("--fs", type=int, default=100)
-    parser.add_argument("--seq_len", type=int, default=1200)
-    parser.add_argument("--overlap", type=int, default=400)
-    parser.add_argument("--encoding", type=str, choices=["cc", "raw"], default="cc")
+    parser.add_argument('-d', "--data_dir", type=str, required=True, help='Path to EDF data.')
+    parser.add_argument('-o', "--out_dir", type=str, required=True, help='Where to store H5 files.')
+    parser.add_argument('-c', '--cohort', type=str, required=True, help='Name of cohort.\nUse this to control logic regarding hypnogram and EDF loading routines.')
+    parser.add_argument("--fs", type=int, default=100, help='Desired output sampling frequency.')
+    parser.add_argument("--seq_len", type=int, default=1200, help='Length of sequences to store on disk.\nFor no encoding (raw), passing `--seq_len 10` will store sequences of 10 consequtive 30 s epochs on disk.')
+    parser.add_argument("--overlap", type=int, default=400, help='Amount of overlap between sequences.\nPassing `--overlap 5` for no encoding (raw) will store sequences overlapping with 5 consequetive 30 s epochs.')
+    parser.add_argument("--encoding", type=str, choices=["cc", "raw"], default="cc", help='Type of encoding.\n`raw` means no encoding. `cc` means cross-correlation encoding.')
+    parser.add_argument('--mix', action="store_true", help='If passed, will create new H5 files containing mixes of already processed files.')
+    parser.add_argument('--test', action="store_true", default=False, help='Flag to signal test data.\nThis will ignore passed overlap argument and set overlap to 0.')
+    parser.add_argument('--slice', type=lambda s: slice(*[int(e) if e.strip() else None for e in s.split(":")]), help='Run over a selection of subjects only.\nEg. passing `--slice 10:20` will process subjects 10 through 19.')
     args = parser.parse_args()
+    # fmt: on
 
-    if args.encoding == "raw":
-        args.seq_len = 10
-        args.overlap = 5
+    # Create logger
+    args.log_dir = os.path.join("logs", "preprocessing", args.cohort, args.encoding)
+    logging.basicConfig(
+        format="%(asctime)s | %(levelname)-8s | %(message)s",
+        level=logging.INFO,
+        datefmt="%I:%M:%S",
+        handlers=[logging.FileHandler(os.path.join(args.log_dir, "preprocessing.log"), "w"), logging.StreamHandler()],
+    )
 
-    process_data(args)
+    if args.test:
+        args.subset = "test"
+        args.overlap = 0
+    else:
+        args.subset = "train"
+
+    logging.info(f'Usage: {" ".join([x for x in sys.argv])}\n')
+    logging.info("Settings:")
+    logging.info("---------")
+    for idx, (k, v) in enumerate(sorted(vars(args).items())):
+        if idx == (len(vars(args)) - 1):
+            logging.info(f"{k:>15}\t{v}\n")
+        else:
+            logging.info(f"{k:>15}\t{v}")
+
+    if args.mix:
+        mix_encodings(args)
+    else:
+        process_data(args)
