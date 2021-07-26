@@ -211,6 +211,14 @@ def load_edf_ssc(filepath, fs):
     return load_edf(filepath, fs, channel_dict)
 
 
+def load_edf_dcsm(filepath, fs):
+
+    with open("utils/channel_dicts/dcsm.json") as json_file:
+        channel_dict = json.load(json_file)
+
+    return load_edf(filepath, fs, channel_dict)
+
+
 def load_edf_template(filepath, fs):
 
     with open("path/to/mychannelmapping.json") as json_file:

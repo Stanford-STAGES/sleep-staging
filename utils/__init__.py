@@ -48,6 +48,7 @@ edf_read_fns = {
     "mros": load_edf_mros,
     "shhs": load_edf_shhs,
     "ssc": load_edf_ssc,
+    "dcsm": load_edf_dcsm,
 }
 
 # __all__ = ["evaluate_performance", "load_h5_data", "ParallelExecutor", "read_fns", "get_args", "get_model"]
