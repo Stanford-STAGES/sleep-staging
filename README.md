@@ -4,6 +4,10 @@ This repository contains source code used for training sleep stage detection mod
 
 This is a work in progress, and will be updated regularly.
 
+# Table of contents
+1. [How to run](#how-to-run)
+2. [Detailed example](#detailed-example)
+
 <!-- ## Description
 
 ## Installation
