@@ -102,6 +102,69 @@ python train.py [OPTIONS]
 The `[OPTIONS]` can be a list of input arguments controlling various aspects of the model training, such as the datamodule, model architecture, optimizer, etc. as well as all the flags listed in the [PyTorch Lightning Trainer API](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#trainer-flags).
 The full list of optional flags can be shown by running `python train.py --help`
 
+## Detailed example
+The following example will go through the steps of 1) downloading and 2) preparing a dataset, 3) train a model on the dataset, and finally 4) run evaluation.
+We will use the Danish Center for Sleep Medicine Cohort (DCSM, presented [here][usleep]), which contains 255 PSGs from a diverse group of patients with sleep disorders.
+
+### Dataset preparation
+Download the DSCM dataset by calling the `fetch_data` routine:
+```
+python -m preprocessing.download_data.fetch_data -d dcsm \
+                                                 -o data/dcsm/edf
+```
+This will place the dataset in the `data/dcsm` folder, but you can change this to accomodate your own preferences.
+
+Run the channel mapping routine using the following command:
+```
+python -m utils.channel_label_identifier -d data/dcsm/edf \
+                                         -o utils/channel_dicts/dcsm.json \
+                                         -c C3 C4 O1 O2 EOGL EOGR EMG A1 A2 EOGRef EMGRef
+```
+Before running the preprocessing pipeline, we add the following function in `utils/edf_utils.py` in order to use the correct channel mapping JSON
+(we also remember to add the `{"dcsm": load_edf_dcsm}` key-val pair to the `edf_read_fns` in `utils/__init__.py`):
+```
+def load_edf_dcsm(filepath, fs):
+
+    with open("utils/channel_dicts/dcsm.json") as json_file:
+        channel_dict = json.load(json_file)
+
+    return load_edf(filepath, fs, channel_dict)
+```
+The following function is added to `utils/sta_utils.py` to load correct hypnograms (DCSM hypnograms are in .ids format (Index/Duration/Stage)):
+```
+def load_hypnogram_ids(hyp_file):
+
+    parts = hyp_file.split(".")
+    if len(parts) > 1:
+        parts = parts[0]
+    dirname, basename = os.path.split(hyp_file)
+    if basename == "hypnogram":
+        hyp_file = os.path.join(dirname, basename + ".ids")
+    else:
+        hyp_file = os.path.join(dirname, "hypnogram.ids")
+
+    df = pd.read_csv(hyp_file, header=None)
+    dur = df[1].values // 30
+    stages = df[2].values
+    hypnogram = [STAGE_MAP[s] for (d, s) in zip(dur, stages) for _ in range(d)]
+
+    return np.asarray(hypnogram)[:, np.newaxis]
+```
+Similar to above, we remember to add `{"dcsm": load_hypnogram_ids}` to `hypnogram_read_fns` in `utils/sta_utils.py`.
+The preprocessing pipeline which resamples, filters, and segments the PSG data can finally run by the following command:
+```
+python -m preprocessing.process_data -d data/dcsm/edf \
+                                     -o data/dcsm/raw \
+                                     --encoding raw \
+                                     --seq_len 10 \
+                                     --overlap 5 \
+                                     --fs 128 \
+                                     -c dcsm
+```
+This will place the H5 files in the `data/dcsm/raw` folder corresponding to the type of encoding.
+
+[usleep]: https://doi.org/10.1038/s41746-021-00440-5
+
 <!-- #### Example training run -->
 <!--
 ### Testing
