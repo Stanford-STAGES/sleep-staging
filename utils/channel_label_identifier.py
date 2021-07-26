@@ -22,6 +22,8 @@
 
 import argparse
 import json
+import os
+from glob import glob
 import sys
 from collections import Counter
 from pathlib import Path
@@ -51,11 +53,14 @@ def getEDFFiles(path2check):
     p = Path(path2check)
     # verify that we have an accurate directory
     # if so then list all .edf/.EDF files
-    if p.is_dir():
+    # if p.is_dir():
+    if os.path.isdir(path2check):
         print("Checking", path2check, "for edf files.")
-        edfFiles = list(p.glob("**/*.[EeRr][DdEe][FfCc]"))  # make search case-insensitive
+        # edfFiles = list(p.rglob("*.[EeRr][DdEe][FfCc]"))  # make search case-insensitive
+        edfFiles = glob(os.path.join(path2check, "**/*.[EeRr][DdEe][FfCc]"))
         print("Removing any MSLT studies.")
-        edfFiles = [edf for edf in edfFiles if not "mslt" in edf.stem.lower()]
+        # edfFiles = [edf for edf in edfFiles if not "mslt" in edf.stem.lower()]
+        edfFiles = [edf for edf in edfFiles if "mslt" not in os.path.basename(edf.lower())]
     else:
         print(path2check, " is not a valid directory.")
         edfFiles = []
