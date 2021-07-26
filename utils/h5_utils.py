@@ -88,6 +88,22 @@ def load_psg_h5_data(filename, scaling=None):
     return sequences_in_file, scaler
 
 
+def save_h5(save_name, M, L, W, Z):
+
+    chunks_M = (1,) + M.shape[1:]  # M.shape[1], M.shape[2])
+    chunks_L = (1,) + L.shape[1:]  # (1, L.shape[1], L.shape[2])
+    if W is not None:
+        chunks_W = (1,) + W.shape[1:]
+    if Z is not None:
+        chunks_Z = (1,) + Z.shape[1:]
+    with File(save_name, "w") as f:
+        f.create_dataset("M", data=M, chunks=chunks_M)
+        f.create_dataset("L", data=L, chunks=chunks_L)
+        if W is not None:
+            f.create_dataset("W", data=W, chunks=chunks_W)
+        if Z is not None:
+            f.create_dataset("Z", data=Z, chunks=chunks_Z)
+
 # def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
 
 #     if scaling in SCALERS.keys():
