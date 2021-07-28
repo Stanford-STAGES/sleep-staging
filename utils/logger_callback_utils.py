@@ -9,9 +9,7 @@ def get_loggers_callbacks(args, model=None):
     try:
         # Setup logger(s) params
         csv_logger_params = dict(
-            save_dir="./experiments",
-            name=os.path.join(*args.save_dir.split("/")[1:-1]),
-            version=args.save_dir.split("/")[-1],
+            save_dir="./experiments", name=os.path.join(*args.save_dir.split("/")[1:-1]), version=args.save_dir.split("/")[-1],
         )
         wandb_logger_params = dict(
             log_model=False,
@@ -34,7 +32,7 @@ def get_loggers_callbacks(args, model=None):
             save_last=True,
             save_top_k=1,
         )
-        earlystopping_parameters = dict(monitor=args.earlystopping_monitor, patience=args.earlystopping_patience,)
+        # earlystopping_parameters = dict(monitor=args.earlystopping_monitor, patience=args.earlystopping_patience,)
         callbacks = [
             pl_callbacks.ModelCheckpoint(**checkpoint_monitor_params),
             # pl_callbacks.EarlyStopping(**earlystopping_parameters),
