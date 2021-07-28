@@ -42,6 +42,8 @@ class BaseDataset(Dataset):
         eval_ratio=None,
         balanced_sampling=False,
         sequence_length=5,
+        max_eval_records=1000,
+        n_channels=5,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -56,6 +58,8 @@ class BaseDataset(Dataset):
         self.eval_ratio = eval_ratio
         self.balanced_sampling = balanced_sampling
         self.sequence_length = sequence_length
+        self.max_eval_records = max_eval_records
+        self.n_channels = n_channels
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
         self.index_to_record = []
         self.index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
@@ -82,23 +86,53 @@ class BaseDataset(Dataset):
         )
         self.n_classes = 5
         cum_class_counts = np.zeros(self.n_classes, dtype=np.int64)
-        for record, (hypnogram, sequences_in_file, scaler, stable_sleep, class_counts) in zip(
-            tqdm(self.records, desc="Processing"), data
-        ):
-            # Some sequences are all unstable sleep, which interferes with the loss calculations.
-            # This selects sequences where at least one epoch is sleep.
+
+        def sort_record_data(record, data):
+            hypnogram, sequences_in_file, scaler, stable_sleep, class_counts = data
             if (stable_sleep.squeeze(-1) == False).all():
                 # print("All sequences are either unstable, or not scored")
                 select_sequences = np.arange(sequences_in_file)
             else:
                 select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
-            # self.record_indices[record] = select_sequences  # np.arange(sequences_in_file)
-            self.record_indices[record] = np.arange(sequences_in_file)
-            # self.record_class_indices[record] = get_class_sequence_idx(hypnogram, select_sequences)
-            self.index_to_record.extend([{"record": record, "idx": x} for x in select_sequences])
-            self.scalers[record] = scaler
-            self.stable_sleep[record] = stable_sleep
-            cum_class_counts += class_counts
+            # if len(class_counts) < 5:
+            #     print(
+            #         f"Hypnogram count error | Record: {record} | Hypnogram shape: {hypnogram.shape} | Unique classes: {np.unique(hypnogram)} | Class counts: {class_counts}"
+            #     )
+            return dict(
+                record_indices=(record, select_sequences),
+                record_class_indices=(record, get_class_sequence_idx(hypnogram, select_sequences)),
+                index_to_record=[{"record": record, "idx": x} for x in select_sequences],
+                scalers=(record, scaler),
+                stable_sleep=(record, stable_sleep),
+                cum_class_counts=(record, class_counts),
+            )
+
+        sorted_data = ParallelExecutor(n_jobs=-1, prefer="threads")(total=len(self.records), desc="Processing")(
+            delayed(sort_record_data)(record, d) for record, d in zip(self.records, data)
+        )
+        self.record_indices = dict([s["record_indices"] for s in sorted_data])
+        self.record_class_indices = dict([s["record_class_indices"] for s in sorted_data])
+        self.scalers = dict([s["scalers"] for s in sorted_data])
+        self.stable_sleep = dict([s["stable_sleep"] for s in sorted_data])
+        self.index_to_record = [sub for s in sorted_data for sub in s["index_to_record"]]
+        cum_class_counts = sum([s["cum_class_counts"][1] for s in sorted_data if len(s["cum_class_counts"][1]) == 5])
+        # for record, (hypnogram, sequences_in_file, scaler, stable_sleep, class_counts) in zip(
+        #     tqdm(self.records, desc="Processing"), data
+        # ):
+        #     # Some sequences are all unstable sleep, which interferes with the loss calculations.
+        #     # This selects sequences where at least one epoch is sleep.
+        #     if (stable_sleep.squeeze(-1) == False).all():
+        #         # print("All sequences are either unstable, or not scored")
+        #         select_sequences = np.arange(sequences_in_file)
+        #     else:
+        #         select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
+        #     # self.record_indices[record] = select_sequences  # np.arange(sequences_in_file)
+        #     self.record_indices[record] = np.arange(sequences_in_file)
+        #     # self.record_class_indices[record] = get_class_sequence_idx(hypnogram, select_sequences)
+        #     self.index_to_record.extend([{"record": record, "idx": x} for x in select_sequences])
+        #     self.scalers[record] = scaler
+        #     self.stable_sleep[record] = stable_sleep
+        #     cum_class_counts += class_counts
 
         # Define the class-balanced weights. We normalize the class counts to the lowest value as the numerator
         # otherwise will dominate the expression
@@ -106,14 +140,15 @@ class BaseDataset(Dataset):
         self.cb_weights_norm = (1 - self.beta) / (1 - self.beta ** (cum_class_counts / cum_class_counts.min()))
         self.effective_samples = 1 / self.cb_weights_norm
         self.cb_weights = self.cb_weights_norm * self.n_classes / self.cb_weights_norm.sum()
-        print("")
-        print(f"Class counts: {cum_class_counts}")
-        print(f"Beta: {self.beta}")
-        print(f"CB weights norm: {self.cb_weights_norm}")
-        print(f"Effective samples: {self.effective_samples}")
-        print(f"CB weights: {self.cb_weights}")
-        print("")
-        print("Finished loading data")
+        if int(os.environ.get("LOCAL_RANK", 0)) == 0:
+            print("")
+            print(f"Class counts: {cum_class_counts}")
+            print(f"Beta: {self.beta}")
+            print(f"CB weights norm: {self.cb_weights_norm}")
+            print(f"Effective samples: {self.effective_samples}")
+            print(f"CB weights: {self.cb_weights}")
+            print("")
+            print("Finished loading data")
 
     def shuffle_records(self):
         random.shuffle(self.records)
@@ -245,7 +280,11 @@ class BaseDataset(Dataset):
         #         # plt.xlim([])
         #         plt.savefig("results/synthetic_spindles.png", dpi=300, bbox_inches="tight", pad_inches=0)
         #         utils.plot_data(x.T, t.T, save_path="more_spindles.png")
-
+        assert x.shape[0] >= self.n_channels, f"Requested {self.n_channels}, PSG only has {x.shape[0]}!"
+        if self.n_channels == 4:
+            x = np.concatenate((x[np.newaxis, 0], x[-3:]), axis=0)  # only use 1 EEG
+        elif self.n_channels == 5:
+            pass  # H5 saves 5 channels per default. TODO: Change this when pipeline iis updated to include more channels, e.g. frontals.
         return x, t, current_record, current_sequence, stable_sleep
 
     def __str__(self):
@@ -284,7 +323,8 @@ class BaseSubset(Dataset):
         return out
 
     def __get_subset_indices(self):
-        t = list(map(lambda x: x["record"] in self.records, self.dataset.index_to_record))
+        records = set(self.records)
+        t = list(map(lambda x: x["record"] in records, self.dataset.index_to_record))
         return list(compress(range(len(t)), t))
 
     def __getitem__(self, idx):
@@ -330,6 +370,7 @@ class BaseDataModule(pl.LightningDataModule):
         adjustment=None,
         balanced_sampling=False,
         sequence_length=5,
+        max_eval_records=1000,
         **kwargs,
     ):
         super().__init__()
@@ -344,6 +385,8 @@ class BaseDataModule(pl.LightningDataModule):
         self.n_records = n_records
         self.n_workers = n_workers
         self.scaling = scaling
+        self.max_eval_records = max_eval_records
+        self.n_channels = kwargs["n_channels"]
         if isinstance(self.data_dir, dict):
             self.data = self.data_dir
         self.dataset_params = dict(
@@ -356,6 +399,8 @@ class BaseDataModule(pl.LightningDataModule):
             scaling=self.scaling,
             adjustment=self.adjustment,
             sequence_length=sequence_length,
+            max_eval_records=self.max_eval_records,
+            n_channels=self.n_channels,
         )
 
     def setup(self, stage="fit"):
@@ -413,10 +458,11 @@ class BaseDataModule(pl.LightningDataModule):
         dataset_group.add_argument("--cv", default=None, type=int)
         dataset_group.add_argument("--cv_idx", default=None, type=int)
         dataset_group.add_argument("--balanced_sampling", default=False, action="store_true")
+        dataset_group.add_argument("--max_eval_records", default=500, type=int)
         dataset_group.add_argument(
             "--sequence_length",
             default=5,
-            help="Sequence length in minutes (default: 5 min). If 'full', an entire PSG is loaded at a time (should be used with batch_size=1).",
+            help="Sequence length in minutes (default: 5 min). If 'full', an entire PSG is loaded at a time (should only be used with batch_size=1).",
         )
 
         # DATALOADER specific
