@@ -34,7 +34,7 @@ torch.backends.cudnn.benchmark = True
 
 def run_predict():
 
-    args = utils.get_args()
+    args = utils.get_args("predict")
 
     # If you wish to view applied settings, uncomment these two lines.
     # pprint.pprint(vars(args))
@@ -55,23 +55,26 @@ def run_predict():
     # ------------------------------------------------------------------------------- #
     # TEST ON NEW DATA
     # ------------------------------------------------------------------------------- #
-    results_dir = os.path.join(os.path.dirname(args.resume_from_checkpoint), "hi_lo_res")
+    results_dir = os.path.join(os.path.dirname(args.resume_from_checkpoint), "predictions")
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
     test_dm = []
     ds_args = model.hparams
-    ds_args["data_dir"] = "data/train"
-    ds_args["n_jobs"] = args.n_jobs
-    ds_args["n_records"] = None
+    ds_args["balanced_sampling"] = False  # This should not be set on eval data
+    ds_args["batch_size"] = 1
+    ds_args["sequence_length"] = "full"
     ds_args["n_workers"] = args.n_workers
-    ds_args["batch_size"] = args.batch_size
-    ds_args["limit_test_batches"] = args.limit_test_batches
-    ds_args["adjustment"] = args.adjustment
-    ds_args["sequence_length"] = args.sequence_length
+    # ds_args["data_dir"] = "data/train"
+    # ds_args["n_jobs"] = args.n_jobs
+    # ds_args["n_records"] = None
+    # ds_args["batch_size"] = args.batch_size
+    # ds_args["limit_test_batches"] = args.limit_test_batches
+    # ds_args["adjustment"] = args.adjustment
+    # ds_args["sequence_length"] = args.sequence_length
 
-    # test_dm.append(("SSC-WSC_eval", datasets.SscWscDataModule(**ds_args)),)
-    # test_dm[-1][1].setup("fit")
+    eval_dm = ("eval", datasets.SscWscDataModule(**ds_args))
+    eval_dm[1].setup("fit")
 
     # test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
     # test_dm[-1][1].setup("test")
@@ -81,22 +84,25 @@ def run_predict():
     # khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
     # test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
     # test_dm[-1][1].setup("test")
-    test_args = dict(
-        batch_size=args.batch_size,
-        n_workers=args.n_workers,
-        n_records=None,
-        scaling="robust",
-        adjustment=0,
-        n_jobs=args.n_jobs,
-        sequence_length=args.sequence_length,
-    )
-    # test_dm.append(("DHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/dhc/raw"}, **test_args)),)
-    # test_dm.append(("IHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ihc/raw"}, **test_args)),)
-    # test_dm.append(("KHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/khc/raw"}, **test_args)),)
-    # test_dm.append(("JCTS", datasets.BaseDataModule(data_dir={"train": None, "test": "data/jcts/raw"}, **test_args)),)
-    test_dm.append(("AHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ahc/raw"}, **test_args)),)
-    for dm in test_dm:
-        dm[1].setup("test")
+    if args.predict_on:
+        test_args = dict(
+            batch_size=1,
+            n_workers=args.n_workers,
+            n_records=10,
+            scaling="robust",
+            adjustment=0,
+            n_jobs=ds_args.n_jobs,
+            sequence_length="full",
+            n_channels=ds_args.n_channels,
+        )
+        # test_dm.append(("DHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/dhc/raw"}, **test_args)),)
+        # test_dm.append(("IHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ihc/raw"}, **test_args)),)
+        for cohort, data_path in args.predict_on.items():
+            test_dm.append((cohort, datasets.BaseDataModule(data_dir={"train": None, "test": data_path}, **test_args)),)
+        # test_dm.append(("JCTS", datasets.BaseDataModule(data_dir={"train": None, "test": "data/jcts/raw"}, **test_args)),)
+        # test_dm.append(("AHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ahc/raw"}, **test_args)),)
+        for dm in test_dm:
+            dm[1].setup("test")
 
     for name, tdm in test_dm:
         # predictions = trainer.test(model, test_dataloaders=tdl, verbose=False)[0]
@@ -121,8 +127,7 @@ def run_predict():
             os.makedirs(os.path.join(results_dir, "predictions", f"{name.lower()}"), exist_ok=True)
             for record, record_predictions in tqdm(predictions.items()):
                 with open(
-                    os.path.join(results_dir, "predictions", f"{name.lower()}", f"preds_{record.split('.')[0]}.pkl"),
-                    "wb",
+                    os.path.join(results_dir, "predictions", f"{name.lower()}", f"preds_{record.split('.')[0]}.pkl"), "wb",
                 ) as pkl:
                     pickle.dump(record_predictions, pkl)
 
