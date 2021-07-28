@@ -167,6 +167,24 @@ python -m preprocessing.process_data -d data/dcsm/edf \
 ```
 This will place the H5 files in the `data/dcsm/raw` folder corresponding to the type of encoding.
 
+### Run training procedure
+The following command will train a sleep stage model using the `massc_average` architecture on the DSCM data:
+```
+python train.py -d data/dcsm/raw \
+                --model_type massc_average \
+                --gpus 1
+                --block_type simple
+                --balanced_sampling
+                --n_records 20
+                --scaling robust
+                --name dcsm
+```
+#### Using multiple threads for dataloading
+By default, the datamodule will use only the main process for the train and eval data loaders.
+If more cores are available, training can be sped up by using the `--n_workers N` flag in the training command above, while setting `N > 0`.
+
+#### Multi-GPU training
+As mentioned, all the flags from PyTorch Lightning are available here, so in order to do multi-GPU training, one has simply to add `--gpus N` and `--accelerator ddp` to the flags supplied to `train.py`.
 [usleep]: https://doi.org/10.1038/s41746-021-00440-5
 
 <!-- #### Example training run -->
