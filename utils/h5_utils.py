@@ -104,6 +104,7 @@ def save_h5(save_name, M, L, W, Z):
         if Z is not None:
             f.create_dataset("Z", data=Z, chunks=chunks_Z)
 
+
 # def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
 
 #     if scaling in SCALERS.keys():
@@ -142,7 +143,7 @@ def save_h5(save_name, M, L, W, Z):
 #     return sequences_in_file, scaler, stable_sleep
 
 
-def initialize_record(filename, scaling=None, overlap=True, adjustment=30, sequence_length=5):
+def initialize_record(filename, scaling=None, overlap=True, adjustment=30, sequence_length=5, balanced_sampling=False):
 
     if scaling in SCALERS.keys():
         scaler = SCALERS[scaling]()
@@ -200,7 +201,35 @@ def initialize_record(filename, scaling=None, overlap=True, adjustment=30, seque
         stable_sleep = (stable_sleep.transpose(2, 0, 1).reshape(shape[2], -1).T)[np.newaxis]
         sequences_in_file = hypnogram.shape[0]
 
-    return hypnogram, sequences_in_file, scaler, stable_sleep, bin_counts
+    sorted_data = sort_record_data(os.path.basename(filename), hypnogram, scaler, stable_sleep, bin_counts, balanced_sampling)
+
+    return sorted_data
+
+
+def sort_record_data(record, hypnogram, scaler, stable_sleep, class_counts, balanced_sampling):
+    select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
+    record_class_indices = get_class_sequence_idx(hypnogram, select_sequences)
+    index_to_record = [{"record": record, "idx": x} for x in select_sequences]
+    if balanced_sampling:
+        index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
+        for c in index_to_record_class.keys():
+            index_to_record_class[c] = [
+                {
+                    "idx": [idx for idx, i2r in enumerate(index_to_record) if i2r["idx"] == x and record == i2r["record"]][0],
+                    "record": record,
+                    "record_idx": x,
+                }
+                for x in record_class_indices[c]
+            ]
+    return dict(
+        record_indices=(record, select_sequences),
+        record_class_indices=(record, record_class_indices),
+        index_to_record=index_to_record,
+        index_to_record_class=index_to_record_class if balanced_sampling else None,
+        scalers=(record, scaler),
+        stable_sleep=(record, stable_sleep),
+        cum_class_counts=(record, class_counts),
+    )
 
 
 def get_stable_sleep_periods(hypnogram, adjustment=30):
