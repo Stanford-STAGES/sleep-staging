@@ -269,7 +269,13 @@ class MASSCAverage(ptl.LightningModule):
                 {
                     "eval/acc": acc,
                     "eval/cohen": cohen,
-                    "eval_f1_macro": f1_macro,
+                    "eval/f1_macro": f1_macro,
+                },
+                prog_bar=True,
+                on_epoch=True,
+            )
+            self.log_dict(
+                {
                     "eval/precision/wake": precision[0],
                     "eval/precision/n1": precision[1],
                     "eval/precision/n2": precision[2],
@@ -302,12 +308,17 @@ class MASSCAverage(ptl.LightningModule):
             recall = metrics.recall_score(
                 t[s & u].argmax(-1), p[s & u].argmax(-1), labels=[0, 1, 2, 3, 4], average=None
             )
-
             self.log_dict(
                 {
                     "eval/acc": acc,
                     "eval/cohen": cohen,
                     "eval/f1_macro": f1_macro,
+                },
+                prog_bar=True,
+                on_epoch=True,
+            )
+            self.log_dict(
+                {
                     "eval/precision/wake": precision[0],
                     "eval/precision/n1": precision[1],
                     "eval/precision/n2": precision[2],
@@ -319,7 +330,7 @@ class MASSCAverage(ptl.LightningModule):
                     "eval/recall/n3": recall[3],
                     "eval/recall/rem": recall[4],
                 },
-                prog_bar=True,
+                prog_bar=False,
                 on_epoch=True,
             )
         else:
