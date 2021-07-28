@@ -1,4 +1,4 @@
-import math
+import logging
 import os
 import random
 import warnings
@@ -12,7 +12,7 @@ from h5py import File
 from joblib import delayed
 from joblib import Memory
 from joblib import Parallel
-from sklearn.preprocessing import *
+from sklearn.preprocessing import RobustScaler, StandardScaler
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from torch.utils.data import Subset
@@ -26,6 +26,8 @@ except ImportError:
 
 warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
 SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
+
+logger = logging.getLogger()
 
 
 def get_class_sequence_idx(hypnogram, selected_sequences):
@@ -195,15 +197,16 @@ class SscWscPsgDataset(Dataset):
         self.sequence_length = sequence_length
         self.max_eval_records = max_eval_records
         self.n_channels = n_channels
+        self.n_classes = 5
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
         # self.data = {r: [] for r in self.records}
-        self.index_to_record = []
+        # self.index_to_record = []
         self.index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
         # self.record_to_index = []
-        self.record_indices = {r: None for r in self.records}
-        self.scalers = {r: None for r in self.records}
-        self.stable_sleep = {r: None for r in self.records}
-        self.record_class_indices = {r: None for r in self.records}
+        # self.record_indices = {r: None for r in self.records}
+        # self.scalers = {r: None for r in self.records}
+        # self.stable_sleep = {r: None for r in self.records}
+        # self.record_class_indices = {r: None for r in self.records}
         # self.batch_indices = []
         # self.current_record_idx = -1
         # self.current_record = None
@@ -212,52 +215,72 @@ class SscWscPsgDataset(Dataset):
         # data = load_psg_h5_data(os.path.join(self.data_dir, self.records[0]))
         self.cache_dir = "data/.cache_large"
         memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
-        get_data = memory.cache(initialize_record)
-        # get_data = initialize_record
+        # get_data = memory.cache(initialize_record)
+        get_data = initialize_record
 
         # Get information about the data
         print(f"Loading mmap data using {n_jobs} workers:")
-        data = ParallelExecutor(n_jobs=n_jobs, prefer="threads")(total=len(self.records))(
+        sorted_data = ParallelExecutor(n_jobs=n_jobs, prefer="threads")(total=len(self.records))(
             delayed(get_data)(
                 filename=os.path.join(self.data_dir, record),
                 scaling=self.scaling,
                 adjustment=self.adjustment,
                 overlap=self.overlap,
                 sequence_length=self.sequence_length,
+                balanced_sampling=self.balanced_sampling,
             )
             for record in self.records
         )
         # for record, d in zip(tqdm(self.records, desc='Processing'), data):
         #     seqs_in_file = d[2]
         #     self.data[record] = {'data': d[0], 'target': d[1]}
-        self.n_classes = 5
         cum_class_counts = np.zeros(self.n_classes, dtype=np.int64)
 
-        # TODO: merge this function into the get_data function
-        def sort_record_data(record, data):
-            hypnogram, _, scaler, stable_sleep, class_counts = data
-            select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
-            # if len(class_counts) < 5:
-            #     print(
-            #         f"Hypnogram count error | Record: {record} | Hypnogram shape: {hypnogram.shape} | Unique classes: {np.unique(hypnogram)} | Class counts: {class_counts}"
-            #     )
-            return dict(
-                record_indices=(record, select_sequences),
-                record_class_indices=(record, get_class_sequence_idx(hypnogram, select_sequences)),
-                index_to_record=[{"record": record, "idx": x} for x in select_sequences],
-                scalers=(record, scaler),
-                stable_sleep=(record, stable_sleep),
-                cum_class_counts=(record, class_counts),
-            )
+        # # TODO: merge this function into the get_data function
+        # def sort_record_data(record, data):
+        #     index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
+        #     hypnogram, _, scaler, stable_sleep, class_counts = data
+        #     select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
+        #     record_class_indices = get_class_sequence_idx(hypnogram, select_sequences)
+        #     index_to_record = [{"record": record, "idx": x} for x in select_sequences]
+        #     for c in index_to_record_class.keys():
+        #         index_to_record_class[c] = [
+        #             {
+        #                 "idx": [idx for idx, i2r in enumerate(index_to_record) if i2r["idx"] == x and record == i2r["record"]][
+        #                     0
+        #                 ],
+        #                 "record": record,
+        #                 "record_idx": x,
+        #             }
+        #             for x in record_class_indices[c]
+        #         ]
+        #     # if len(class_counts) < 5:
+        #     #     print(
+        #     #         f"Hypnogram count error | Record: {record} | Hypnogram shape: {hypnogram.shape} | Unique classes: {np.unique(hypnogram)} | Class counts: {class_counts}"
+        #     #     )
+        #     return dict(
+        #         record_indices=(record, select_sequences),
+        #         record_class_indices=(record, record_class_indices),
+        #         index_to_record=index_to_record,
+        #         index_to_record_class=index_to_record_class,
+        #         scalers=(record, scaler),
+        #         stable_sleep=(record, stable_sleep),
+        #         cum_class_counts=(record, class_counts),
+        #     )
 
-        sorted_data = ParallelExecutor(n_jobs=-1, prefer="threads")(total=len(self.records), desc="Processing")(
-            delayed(sort_record_data)(record, d) for record, d in zip(self.records, data)
-        )
-        self.record_indices = dict([s["record_indices"] for s in sorted_data])
-        self.record_class_indices = dict([s["record_class_indices"] for s in sorted_data])
+        # sorted_data = ParallelExecutor(n_jobs=-1, prefer="threads")(total=len(self.records), desc="Processing")(
+        #     delayed(sort_record_data)(record, d) for record, d in zip(self.records, data)
+        # )
+        self.record_indices = dict(
+            [s["record_indices"] for s in sorted_data]
+        )  # This contains the indices for each record (i.e. index 0 maps to first sequence of recording 1 etc.)
+        self.record_class_indices = dict(
+            [s["record_class_indices"] for s in sorted_data]
+        )  # This holds the sequence indices containing each stage in reach record
         self.scalers = dict([s["scalers"] for s in sorted_data])
         self.stable_sleep = dict([s["stable_sleep"] for s in sorted_data])
         self.index_to_record = [sub for s in sorted_data for sub in s["index_to_record"]]
+        # self.index_to_record_class = [sub for s in sorted_data for sub in s["index_to_record_class"]]
         cum_class_counts = sum([s["cum_class_counts"][1] for s in sorted_data if len(s["cum_class_counts"][1]) == 5])
         # for record, (hypnogram, sequences_in_file, scaler, stable_sleep, class_counts) in zip(
         #     tqdm(self.records, desc="Processing"), data
@@ -270,21 +293,23 @@ class SscWscPsgDataset(Dataset):
         #     self.index_to_record.extend(
         #         [{"record": record, "idx": x} for x in select_sequences]
         #     )  # range(sequences_in_file)])
-        #     # for c in self.index_to_record_class.keys():
-        #     #     self.index_to_record_class[c].extend(
-        #     #         [
-        #     #             {
-        #     #                 "idx": [
-        #     #                     idx
-        #     #                     for idx, i2r in enumerate(self.index_to_record)
-        #     #                     if i2r["idx"] == x and record == i2r["record"]
-        #     #                 ][0],
-        #     #                 "record": record,
-        #     #                 "record_idx": x,
-        #     #             }
-        #     #             for x in self.record_class_indices[record][c]
-        #     #         ]
-        #     #     )
+        # if self.balanced_sampling:
+        #     for record in self.records:
+        #         for c in self.index_to_record_class.keys():
+        #             self.index_to_record_class[c].extend(
+        #                 [
+        #                     {
+        #                         "idx": [
+        #                             idx
+        #                             for idx, i2r in enumerate(self.index_to_record)
+        #                             if i2r["idx"] == x and record == i2r["record"]
+        #                         ][0],
+        #                         "record": record,
+        #                         "record_idx": x,
+        #                     }
+        #                     for x in self.record_class_indices[record][c]
+        #                 ]
+        #             )
         #     self.scalers[record] = scaler
         #     self.stable_sleep[record] = stable_sleep
         #     try:
@@ -317,26 +342,22 @@ class SscWscPsgDataset(Dataset):
         n_records = len(self.records)
         self.shuffle_records()
         # if self.cv is None:
-        n_eval = min(int(n_records * self.eval_ratio), self.max_eval_records)
-        n_train = n_records - n_eval
-        train_idx = np.arange(n_eval, n_records)
-        eval_idx = np.arange(0, n_eval)
         # train_data = SscWscPsgSubset(self, np.arange(n_eval, n_records), name="Train")
         # eval_data = SscWscPsgSubset(self, np.arange(0, n_eval), name="Validation")
         # else:
         if self.cv:
             from sklearn.model_selection import KFold, StratifiedKFold
 
-            # kf = KFold(n_splits=np.abs(self.cv))
-            ssc_idx = ["SSC" in s for s in np.array(self.records)[train_idx]]
-            kf = StratifiedKFold(n_splits=np.abs(self.cv))
+            kf = KFold(n_splits=np.abs(self.cv))
+            # ssc_idx = ["SSC" in s for s in np.array(self.records)[train_idx]]
+            # kf = StratifiedKFold(n_splits=np.abs(self.cv))
             if self.cv > 0:
                 # train_idx, eval_idx = list(kf.split(np.arange(n_records)))[self.cv_idx]
-                _, train_idx = list(kf.split(train_idx, ssc_idx))[self.cv_idx]
-            else:
+                # _, train_idx = list(kf.split(train_idx, ssc_idx))[self.cv_idx]
+                # else:
                 # eval_idx, train_idx = list(kf.split(np.arange(n_records)))[self.cv_idx]
                 # train_idx, _ = list(kf.split(np.arange(n_records)))[self.cv_idx]
-                train_idx, _ = list(kf.split(train_idx, ssc_idx))[self.cv_idx]
+                train_idx, eval_idx = list(kf.split(range(n_records)))[self.cv_idx]
             print("\n")
             print(f"Running {np.abs(self.cv)}-fold cross-validation procedure.")
             print(f"Current split: {self.cv_idx}")
@@ -344,10 +365,18 @@ class SscWscPsgDataset(Dataset):
             print(f"Train record indices: {train_idx}")
             print(f"Number of train/eval records: {len(train_idx)}/{len(eval_idx)}")
             print("\n")
-        train_data = SscWscPsgSubset(self, train_idx, balanced_sampling=self.balanced_sampling, name="Train")
-        eval_data = SscWscPsgSubset(self, eval_idx, name="Validation")
+        else:
+            n_eval = min(int(n_records * self.eval_ratio), self.max_eval_records)
+            n_train = n_records - n_eval
+            train_idx = np.arange(n_eval, n_records)
+            eval_idx = np.arange(0, n_eval)
 
-        return train_data, eval_data
+        self.train_idx = train_idx
+        self.eval_idx = eval_idx
+        self.train_data = SscWscPsgSubset(self, train_idx, balanced_sampling=self.balanced_sampling, name="Train")
+        self.eval_data = SscWscPsgSubset(self, eval_idx, name="Validation")
+
+        return self.train_data, self.eval_data
 
     def __len__(self):
         return len(self.index_to_record)
@@ -357,8 +386,12 @@ class SscWscPsgDataset(Dataset):
         try:
             # Grab data
             current_record = self.index_to_record[idx]["record"]
-            current_sequence = self.index_to_record[idx]["idx"]
             scaler = self.scalers[current_record]
+            if self.balanced_sampling:
+                class_choice = np.random.choice(list(self.record_class_indices[current_record].keys()))
+                current_sequence = np.random.choice(self.record_class_indices[current_record][class_choice])
+            else:
+                current_sequence = self.index_to_record[idx]["idx"]
             stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze()
 
             if isinstance(self.sequence_length, str) and self.sequence_length == "full":
@@ -460,25 +493,6 @@ Number of records: {len(self.records)}
         return s
 
 
-# def collate_fn(batch):
-#
-#    x, t, w = (
-#        np.stack([b[0] for b in batch]),
-#        np.stack([b[1] for b in batch]),
-#        np.stack([b[2] for b in batch])
-#    )
-#
-#    return torch.FloatTensor(x), torch.IntTensor(t), torch.FloatTensor(w)
-
-
-def collate_fn(batch):
-
-    X, y = map(torch.FloatTensor, zip(*batch))
-
-    return X, y
-    # return torch.FloatTensor(X), torch.FloatTensor(y), torch.FloatTensor(w)
-
-
 class SscWscPsgSubset(Dataset):
     def __init__(self, dataset, record_indices, name="Train", balanced_sampling=False):
         self.dataset = dataset
@@ -486,18 +500,19 @@ class SscWscPsgSubset(Dataset):
         self.name = name
         self.balanced_sampling = balanced_sampling
         self.records = [self.dataset.records[idx] for idx in self.record_indices]
-        if self.balanced_sampling:
-            print("Using balanced sampling scheme")
-            self.sequence_indices = self._get_subset_class_indices()
-        else:
-            self.sequence_indices = (
-                self.__get_subset_indices()
-            )  # [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
+        # if self.balanced_sampling:
+        #     print("Using balanced sampling scheme")
+        #     self.sequence_indices = self._get_subset_class_indices()
+        # else:
+        self.sequence_indices = (
+            self.__get_subset_indices()
+        )  # [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
 
     def _get_subset_class_indices(self):
+        records = set(self.records)
         out = {k: None for k in self.dataset.index_to_record_class.keys()}
         for c in out.keys():
-            t = list(map(lambda x: x["record"] in self.records, self.dataset.index_to_record_class[c]))
+            t = list(map(lambda x: x["record"] in records, self.dataset.index_to_record_class[c]))
             out[c] = list(compress(range(len(t)), t))
         return out
 
@@ -644,13 +659,13 @@ class SscWscDataModule(pl.LightningDataModule):
         dataset_group.add_argument(
             "--sequence_length",
             default=5,
-            help="Sequence length in minutes (default: 5 min). If 'all', an entire PSG is loaded at a time (should be used with batch_size=1).",
+            help="Sequence length in minutes (default: 5 min). If 'full', an entire PSG is loaded at a time (should only be used with batch_size=1).",
         )
 
         # DATALOADER specific
         dataloader_group = parser.add_argument_group("dataloader")
-        dataloader_group.add_argument("--batch_size", default=64, type=int)
-        dataloader_group.add_argument("--n_workers", default=20, type=int)
+        dataloader_group.add_argument("--batch_size", default=1, type=int)
+        dataloader_group.add_argument("--n_workers", default=0, type=int)
 
         return parser
 
