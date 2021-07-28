@@ -115,8 +115,9 @@ Download the DSCM dataset by calling the `fetch_data` routine:
 ```
 python -m preprocessing.download_data.fetch_data -d dcsm \
                                                  -o data/dcsm/edf
+                                                 -n 20
 ```
-This will place the dataset in the `data/dcsm` folder, but you can change this to accomodate your own preferences.
+This will place the first 20 recordings of the dataset in the `data/dcsm` folder, but you can change this to accomodate your own preferences.
 
 Run the channel mapping routine using the following command:
 ```

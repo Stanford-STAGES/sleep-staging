@@ -22,12 +22,12 @@ def dcsm_paths_func(file_name, server_url, out_dataset_folder):
     return download_url, out_file_path
 
 
-def download_dcsm(out_dataset_folder, N_first=None):
+def download_dcsm(out_dataset_folder, n_first=None):
     """ Download the DCSM (255 records) dataset """
     return download_dataset(
         out_dataset_folder=out_dataset_folder,
         server_url=_SERVER_URL,
         checksums_path=_CHECKSUM_FILE,
         paths_func=dcsm_paths_func,
-        N_first=N_first * 2 if N_first else None,  # Two items per subject
+        n_first=n_first * 2 if n_first else None,  # Two items per subject
     )

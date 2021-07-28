@@ -14,7 +14,7 @@ def fetch_data(args):
         os.makedirs(args.output_dir)
 
     # Actually download data
-    download_dataset(args.dataset, args.output_dir)
+    download_dataset(args.dataset, args.output_dir, args.n_first)
 
 
 if __name__ == "__main__":
@@ -22,7 +22,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, required=True, help="Dataset to download.", choices=available_datasets)
     parser.add_argument(
-        "-o", "--output_dir", type=str, required=True, help=f"Path to output directory.\nWill be created if not available."
+        "-o", "--output_dir", type=str, required=True, help="Path to output directory.\nWill be created if not available."
     )
+    parser.add_argument("-n", "--n_first", help="Number of recordings to download.")
     args = parser.parse_args()
     fetch_data(args)

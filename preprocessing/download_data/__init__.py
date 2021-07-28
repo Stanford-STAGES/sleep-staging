@@ -10,5 +10,5 @@ download_fns = {
 }
 
 
-def download_dataset(dataset_name, out_dir):
-    download_fns[dataset_name](out_dir)
+def download_dataset(dataset_name, out_dir, n_first):
+    download_fns[dataset_name](out_dir, n_first)

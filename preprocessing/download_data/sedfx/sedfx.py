@@ -27,23 +27,23 @@ def sedf_paths_func(file_name, server_url, out_dataset_folder):
     return download_url, out_file_path
 
 
-def download_sedfx_sc(out_dataset_folder, N_first=None):
+def download_sedfx_sc(out_dataset_folder, n_first=None):
     """ Download the Sleep-EDF sleep-cassette (153 records) dataset """
     download_dataset(
         out_dataset_folder=out_dataset_folder,
         server_url=_SERVER_URL_SC,
         checksums_path=_CHECKSUM_FILE_SC,
         paths_func=sedf_paths_func,
-        N_first=N_first * 2 if N_first else None,  # Two items per subject
+        n_first=n_first * 2 if n_first else None,  # Two items per subject
     )
 
 
-def download_sedfx_st(out_dataset_folder, N_first=None):
+def download_sedfx_st(out_dataset_folder, n_first=None):
     """ Download the Sleep-EDF sleep-telemetry (44 records) dataset """
     download_dataset(
         out_dataset_folder=out_dataset_folder,
         server_url=_SERVER_URL_ST,
         checksums_path=_CHECKSUM_FILE_ST,
         paths_func=sedf_paths_func,
-        N_first=N_first * 2 if N_first else None,  # Two items per subject
+        n_first=n_first * 2 if n_first else None,  # Two items per subject
     )
