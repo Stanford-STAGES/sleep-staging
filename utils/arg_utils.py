@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import pprint
 from datetime import datetime
@@ -11,17 +12,19 @@ import datasets
 import models
 
 
-def get_args(print_args=False):
+def get_args(stage="train", print_args=False):
 
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--checkpoint_monitor", default="eval_loss", type=str)
-    parser.add_argument("--dataset_type", type=str, default="stages")
+    parser.add_argument("--dataset_type", type=str, default="ssc-wsc")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--earlystopping_monitor", default="eval_loss", type=str)
     parser.add_argument("--earlystopping_patience", default=100, type=int)
     parser.add_argument("--name", default=None, type=str)
     parser.add_argument("--lr_finder", action="store_true")
     parser.add_argument("--seed", default=1337, type=int)
+    if stage == "predict":
+        parser.add_argument("--predict_on", type=json.loads)
 
     # add args from trainer
     parser = pl.Trainer.add_argparse_args(parser)
@@ -42,29 +45,6 @@ def get_args(print_args=False):
         parser = datasets.available_datamodules[temp_args.model_type].add_dataset_specific_args(parser)
     except:
         parser = datasets.available_datamodules["ssc-wsc"].add_dataset_specific_args(parser)
-    # if temp_args.model_type == "stages":
-    #     parser = datasets.available_datamodules[temp_args.model_type].add_dataset_specific_args(parser)
-    # else:
-    #     parser = datasets.available_datamodules["ssc-wsc"].add_dataset_specific_args(parser)
-    #     parser = datasets.STAGESDataModule.add_dataset_specific_args(parser)
-    # else:
-    #     parser = datasets.SscWscDataModule.add_dataset_specific_args(parser)
-
-    # give the module a chance to add own params
-    # good practice to define LightningModule speficic params in the module
-    # if temp_args.model_type == "stages":
-    #     parser = models.StagesModel.add_model_specific_args(parser)
-    # elif temp_args.model_type == "massc":
-    #     parser = models.MasscModel.add_model_specific_args(parser)
-    # elif temp_args.model_type == "massc_v2":
-    #     # parser = models.MasscV2Model.add_model_specific_args(parser)
-    #     parser = models.MasscV2Model.add_model_specific_args(parser)
-    # elif temp_args.model_type == "simple_massc":
-    #     parser = models.SimpleMasscModel.add_model_specific_args(parser)
-    # elif temp_args.model_type == "avgloss_massc":
-    #     parser = models.AvgLossMasscModel.add_model_specific_args(parser)
-    # elif temp_args.model_type == "utime":
-    #     parser = models.UTimeModel.add_model_specific_args(parser)
 
     # Add args from model
     parser = models.available_models[temp_args.model_type].add_model_specific_args(parser)
@@ -82,14 +62,15 @@ def get_args(print_args=False):
         if "massc" in args.model_type:
             # args.save_dir = Path(os.path.join("experiments", "massc", datetime.now().strftime("%Y%m%d_%H%M%S")))
             if args.name is None:
-                args.save_dir = os.path.join("experiments", "massc", datetime.now().strftime("%Y%m%d_%H%M%S"))
+                # args.save_dir = os.path.join("experiments", "massc", datetime.now().strftime("%Y%m%d_%H%M%S"))
+                args.save_dir = os.path.join("experiments", "massc")
             else:
-                args.save_dir = os.path.join(
-                    "experiments", "massc", args.name, datetime.now().strftime("%Y%m%d_%H%M%S"),
-                )
+                args.save_dir = os.path.join("experiments", "massc", args.name,)
+            #     args.save_dir = os.path.join("experiments", "massc", args.name, datetime.now().strftime("%Y%m%d_%H%M%S"),)
         elif args.model_type == "utime":
             # args.save_dir = Path(os.path.join("experiments", "utime", datetime.now().strftime("%Y%m%d_%H%M%S")))
-            args.save_dir = os.path.join("experiments", "utime", datetime.now().strftime("%Y%m%d_%H%M%S"))
+            # args.save_dir = os.path.join("experiments", "utime", datetime.now().strftime("%Y%m%d_%H%M%S"))
+            args.save_dir = os.path.join("experiments", "utime")
         elif args.model_type == "stages":
             if args.name is None:
                 args.save_dir = os.path.join("experiments", args.model_type, args.model_name,)
@@ -99,7 +80,11 @@ def get_args(print_args=False):
         if int(os.environ.get("LOCAL_RANK", 0)) == 0:
             os.makedirs(args.save_dir)
     else:
-        args.save_dir = args.resume_from_checkpoint if os.path.isdir(args.resume_from_checkpoint) else os.path.dirname(args.resume_from_checkpoint)
+        args.save_dir = (
+            args.resume_from_checkpoint
+            if os.path.isdir(args.resume_from_checkpoint)
+            else os.path.dirname(args.resume_from_checkpoint)
+        )
     # os.makedirs(args.save_dir, exist_ok=True)
     # args.save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -117,6 +102,11 @@ def get_args(print_args=False):
         args.seed = 42 + int(args.model_name.split("_")[-1])
     else:
         args.seed = 1337
+
+    # # Override n_workers for prediction
+    # if stage == "predict":
+    #     if temp_args.n_workers is not None:
+    #         args.n_workers = temp_args.n_workers
 
     if print_args:
         pprint.pprint(vars(args), indent=4)
