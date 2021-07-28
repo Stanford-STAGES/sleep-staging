@@ -13,6 +13,7 @@ torch.backends.cudnn.benchmark = True
 
 def run_training():
 
+    # Get CL args and create save_dir etc.
     args = utils.get_args()
 
     # Remember to seed!
@@ -28,7 +29,8 @@ def run_training():
     loggers, callbacks = utils.get_loggers_callbacks(args, model)
 
     # Define trainer object from arguments
-    trainer = Trainer.from_argparse_args(args, deterministic=True, logger=loggers, callbacks=callbacks)
+    trainer = Trainer.from_argparse_args(args, deterministic=True, logger=loggers, callbacks=callbacks, weights_summary="full")
+    loggers[-1].watch(model)
 
     # ================================================================================================================
     # LEARNING RATE FINDER ROUTINE
@@ -36,14 +38,15 @@ def run_training():
     if args.lr_finder:
         lr_finder = trainer.tuner.lr_find(model, datamodule=dm)
         fig = lr_finder.plot(suggest=True)
-        fig.savefig("results/lr_finder/test.png")
+        fig.savefig("results/lr_finder/lr_finder.png")
         return
     # ================================================================================================================
 
     # Fit model using trainer
     trainer.fit(model, dm)
 
-    return 0
+    # if args.evaluate:
+    return "fin"
 
     # Return results on eval data
     predictions = trainer.test(
