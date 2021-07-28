@@ -185,6 +185,24 @@ If more cores are available, training can be sped up by using the `--n_workers N
 
 #### Multi-GPU training
 As mentioned, all the flags from PyTorch Lightning are available here, so in order to do multi-GPU training, one has simply to add `--gpus N` and `--accelerator ddp` to the flags supplied to `train.py`.
+
+### Get predictions
+After training a model, predictions can be acquired using the following commmand
+```
+python predict.py --resume_from_checkpoint experiments/dcsm
+```
+By default, this will only return predictions for the validation data used in the training phase.
+These are placed in the `experiments/dcsm/predictions/` folder.
+
+#### Predicting on new data
+If a new dataset is acquired, the user can get predictions for this by running the data preprocessing pipeline above and passing a cohort-path key-val pair to the `predict` command:
+```
+python predict.py --resume_from_checkpoint experiments/dcsm --predict_on '{"<cohort_name>": "<path_to_cohort>", "<another_cohort_name>": "<path_to_another_cohort>"}'
+```
+*Note the placement of pings and double pings.*
+
+Similarly to above, prediction speed is affected by adding a GPU and adding more workers by using the `--gpus` and `--n_workers` flags, respectively.
+
 [usleep]: https://doi.org/10.1038/s41746-021-00440-5
 
 <!-- #### Example training run -->
