@@ -60,21 +60,22 @@ class BaseDataset(Dataset):
         self.sequence_length = sequence_length
         self.max_eval_records = max_eval_records
         self.n_channels = n_channels
+        self.n_classes = 5
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
-        self.index_to_record = []
-        self.index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
-        self.record_indices = {r: None for r in self.records}
-        self.scalers = {r: None for r in self.records}
-        self.stable_sleep = {r: None for r in self.records}
-        self.record_class_indices = {r: None for r in self.records}
+        # self.index_to_record = []
+        # self.index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
+        # self.record_indices = {r: None for r in self.records}
+        # self.scalers = {r: None for r in self.records}
+        # self.stable_sleep = {r: None for r in self.records}
+        # self.record_class_indices = {r: None for r in self.records}
         self.cache_dir = "data/.cache"
         memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
-        get_data = memory.cache(initialize_record)
-        # get_data = initialize_record
+        # get_data = memory.cache(initialize_record)
+        get_data = initialize_record
 
         # Get information about the data
         print(f"Loading mmap data using {n_jobs} workers:")
-        data = ParallelExecutor(n_jobs=n_jobs, prefer="threads")(total=len(self.records))(
+        sorted_data = ParallelExecutor(n_jobs=n_jobs, prefer="threads")(total=len(self.records))(
             delayed(get_data)(
                 filename=os.path.join(self.data_dir, record),
                 scaling=self.scaling,
@@ -84,32 +85,31 @@ class BaseDataset(Dataset):
             )
             for record in self.records
         )
-        self.n_classes = 5
         cum_class_counts = np.zeros(self.n_classes, dtype=np.int64)
 
-        def sort_record_data(record, data):
-            hypnogram, sequences_in_file, scaler, stable_sleep, class_counts = data
-            if (stable_sleep.squeeze(-1) == False).all():
-                # print("All sequences are either unstable, or not scored")
-                select_sequences = np.arange(sequences_in_file)
-            else:
-                select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
-            # if len(class_counts) < 5:
-            #     print(
-            #         f"Hypnogram count error | Record: {record} | Hypnogram shape: {hypnogram.shape} | Unique classes: {np.unique(hypnogram)} | Class counts: {class_counts}"
-            #     )
-            return dict(
-                record_indices=(record, select_sequences),
-                record_class_indices=(record, get_class_sequence_idx(hypnogram, select_sequences)),
-                index_to_record=[{"record": record, "idx": x} for x in select_sequences],
-                scalers=(record, scaler),
-                stable_sleep=(record, stable_sleep),
-                cum_class_counts=(record, class_counts),
-            )
+        # def sort_record_data(record, data):
+        #     hypnogram, sequences_in_file, scaler, stable_sleep, class_counts = data
+        #     if (stable_sleep.squeeze(-1) == False).all():
+        #         # print("All sequences are either unstable, or not scored")
+        #         select_sequences = np.arange(sequences_in_file)
+        #     else:
+        #         select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
+        #     # if len(class_counts) < 5:
+        #     #     print(
+        #     #         f"Hypnogram count error | Record: {record} | Hypnogram shape: {hypnogram.shape} | Unique classes: {np.unique(hypnogram)} | Class counts: {class_counts}"
+        #     #     )
+        #     return dict(
+        #         record_indices=(record, select_sequences),
+        #         record_class_indices=(record, get_class_sequence_idx(hypnogram, select_sequences)),
+        #         index_to_record=[{"record": record, "idx": x} for x in select_sequences],
+        #         scalers=(record, scaler),
+        #         stable_sleep=(record, stable_sleep),
+        #         cum_class_counts=(record, class_counts),
+        #     )
 
-        sorted_data = ParallelExecutor(n_jobs=-1, prefer="threads")(total=len(self.records), desc="Processing")(
-            delayed(sort_record_data)(record, d) for record, d in zip(self.records, data)
-        )
+        # sorted_data = ParallelExecutor(n_jobs=-1, prefer="threads")(total=len(self.records), desc="Processing")(
+        #     delayed(sort_record_data)(record, d) for record, d in zip(self.records, data)
+        # )
         self.record_indices = dict([s["record_indices"] for s in sorted_data])
         self.record_class_indices = dict([s["record_class_indices"] for s in sorted_data])
         self.scalers = dict([s["scalers"] for s in sorted_data])
@@ -157,10 +157,10 @@ class BaseDataset(Dataset):
         n_records = len(self.records)
         self.shuffle_records()
         # if self.cv is None:
-        n_eval = int(n_records * self.eval_ratio)
-        n_train = n_records - n_eval
-        train_idx = np.arange(n_eval, n_records)
-        eval_idx = np.arange(0, n_eval)
+        # n_eval = int(n_records * self.eval_ratio)
+        # n_train = n_records - n_eval
+        # train_idx = np.arange(n_eval, n_records)
+        # eval_idx = np.arange(0, n_eval)
         # train_data = SscWscPsgSubset(self, np.arange(n_eval, n_records), name="Train")
         # eval_data = SscWscPsgSubset(self, np.arange(0, n_eval), name="Validation")
         # else:
@@ -168,15 +168,16 @@ class BaseDataset(Dataset):
             from sklearn.model_selection import KFold, StratifiedKFold
 
             # kf = KFold(n_splits=np.abs(self.cv))
-            ssc_idx = ["SSC" in s for s in np.array(self.records)[train_idx]]
-            kf = StratifiedKFold(n_splits=np.abs(self.cv))
+            # ssc_idx = ["SSC" in s for s in np.array(self.records)[train_idx]]
+            # kf = StratifiedKFold(n_splits=np.abs(self.cv))
+            kf = KFold(n_splits=np.abs(self.cv))
             if self.cv > 0:
                 # train_idx, eval_idx = list(kf.split(np.arange(n_records)))[self.cv_idx]
-                _, train_idx = list(kf.split(train_idx, ssc_idx))[self.cv_idx]
-            else:
+                # _, train_idx = list(kf.split(train_idx, ssc_idx))[self.cv_idx]
+                # else:
                 # eval_idx, train_idx = list(kf.split(np.arange(n_records)))[self.cv_idx]
                 # train_idx, _ = list(kf.split(np.arange(n_records)))[self.cv_idx]
-                train_idx, _ = list(kf.split(train_idx, ssc_idx))[self.cv_idx]
+                train_idx, eval_idx = list(kf.split(range(n_recods)))[self.cv_idx]
             print("\n")
             print(f"Running {np.abs(self.cv)}-fold cross-validation procedure.")
             print(f"Current split: {self.cv_idx}")
@@ -184,10 +185,18 @@ class BaseDataset(Dataset):
             print(f"Train record indices: {train_idx}")
             print(f"Number of train/eval records: {len(train_idx)}/{len(eval_idx)}")
             print("\n")
-        train_data = BaseSubset(self, train_idx, balanced_sampling=self.balanced_sampling, name="Train")
-        eval_data = BaseSubset(self, eval_idx, name="Validation")
+        else:
+            n_eval = min(int(n_records * self.eval_ratio), self.max_eval_records)
+            n_train = n_records - n_eval
+            train_idx = np.arange(n_eval, n_records)
+            eval_idx = np.arange(0, n_eval)
 
-        return train_data, eval_data
+        self.train_idx = train_idx
+        self.eval_idx = eval_idx
+        self.train_data = BaseSubset(self, train_idx, balanced_sampling=self.balanced_sampling, name="Train")
+        self.eval_data = BaseSubset(self, eval_idx, name="Validation")
+
+        return self.train_data, self.eval_data
 
     def __len__(self):
         return len(self.index_to_record)
@@ -195,10 +204,19 @@ class BaseDataset(Dataset):
     def __getitem__(self, idx):
 
         try:
-            # Grab data
             current_record = self.index_to_record[idx]["record"]
-            current_sequence = self.index_to_record[idx]["idx"]
-            scaler = self.scalers[current_record]
+            # If using balanced sampling, we skip the idx and choose from records directly in the training data
+            if current_record in set(self.train_data.records) and self.balanced_sampling:
+                current_record = np.random.choice(self.train_data.records)
+                scaler = self.scalers[current_record]
+                while True:
+                    class_choice = np.random.choice(list(self.record_class_indices[current_record].keys()))
+                    if self.record_class_indices[current_record][class_choice]:
+                        current_sequence = np.random.choice(self.record_class_indices[current_record][class_choice])
+                        break
+            else:
+                scaler = self.scalers[current_record]
+                current_sequence = self.index_to_record[idx]["idx"]
             stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze()
 
             if isinstance(self.sequence_length, str) and self.sequence_length == "full":
@@ -307,13 +325,13 @@ class BaseSubset(Dataset):
         self.name = name
         self.balanced_sampling = balanced_sampling
         self.records = [self.dataset.records[idx] for idx in self.record_indices]
-        if self.balanced_sampling:
-            print("Using balanced sampling scheme")
-            self.sequence_indices = self._get_subset_class_indices()
-        else:
-            self.sequence_indices = (
-                self.__get_subset_indices()
-            )  # [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
+        # if self.balanced_sampling:
+        #     print("Using balanced sampling scheme")
+        #     self.sequence_indices = self._get_subset_class_indices()
+        # else:
+        self.sequence_indices = (
+            self.__get_subset_indices()
+        )  # [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
 
     def _get_subset_class_indices(self):
         out = {k: None for k in self.dataset.index_to_record_class.keys()}
@@ -406,9 +424,7 @@ class BaseDataModule(pl.LightningDataModule):
     def setup(self, stage="fit"):
         if stage == "fit":
             assert self.data["train"]
-            dataset = BaseDataset(
-                data_dir=self.data["train"], balanced_sampling=self.balanced_sampling, **self.dataset_params
-            )
+            dataset = BaseDataset(data_dir=self.data["train"], balanced_sampling=self.balanced_sampling, **self.dataset_params)
             self.train, self.eval = dataset.split_data()
         elif stage == "test":
             assert self.data["test"]
