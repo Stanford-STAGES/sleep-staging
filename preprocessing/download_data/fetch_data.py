@@ -24,6 +24,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "-o", "--output_dir", type=str, required=True, help="Path to output directory.\nWill be created if not available."
     )
-    parser.add_argument("-n", "--n_first", help="Number of recordings to download.")
+    parser.add_argument("-n", "--n_first", type=int, help="Number of recordings to download.")
     args = parser.parse_args()
     fetch_data(args)

@@ -11,4 +11,4 @@ download_fns = {
 
 
 def download_dataset(dataset_name, out_dir, n_first):
-    download_fns[dataset_name](out_dir, n_first)
+    download_fns[dataset_name](out_dir, n_first=n_first)
