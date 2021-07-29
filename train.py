@@ -38,7 +38,7 @@ def run_training():
     if args.lr_finder:
         lr_finder = trainer.tuner.lr_find(model, datamodule=dm)
         fig = lr_finder.plot(suggest=True)
-        fig.savefig("results/lr_finder/lr_finder.png")
+        fig.savefig(os.path.join(args.save_dir, "lr_finder.png"))
         return
     # ================================================================================================================
 
