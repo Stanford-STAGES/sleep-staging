@@ -1,0 +1,114 @@
+accelerator: null
+accumulate_grad_batches: 1
+adjustment: 15
+amp_backend: native
+amp_level: O2
+auto_lr_find: false
+auto_scale_batch_size: false
+auto_select_gpus: false
+automatic_optimization: true
+base_lr: 0.05
+batch_size: 32
+benchmark: false
+block_type: simple
+cb_weights: !!python/object/apply:numpy.core.multiarray._reconstruct
+  args:
+  - !!python/name:numpy.ndarray ''
+  - !!python/tuple
+    - 0
+  - !!binary |
+    Yg==
+  state: !!python/tuple
+  - 1
+  - !!python/tuple
+    - 5
+  - !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - false
+  - !!binary |
+    0gpQR0vo3j9M8eXGzHL9PxBO0eCMtsU//XglBOCA/T+E0gyO3TblPw==
+check_val_every_n_epoch: 1
+checkpoint_callback: true
+cv: null
+cv_idx: null
+data_dir: data/ssc_wsc/raw/5min
+debug: false
+default_root_dir: null
+deterministic: false
+distributed_backend: ddp
+earlystopping_patience: 25
+eval_frequency_sec: 30
+eval_ratio: 0.1
+fast_dev_run: false
+filter_base: 4
+flush_logs_every_n_steps: 100
+gpus: 2
+gradient_clip_val: 0
+kernel_size: 21
+learning_rate: 1.0e-05
+limit_test_batches: 1.0
+limit_train_batches: 1.0
+limit_val_batches: 1.0
+log_every_n_steps: 50
+log_gpu_memory: null
+logger: true
+loss_weight: null
+lr_finder: false
+lr_reduce_factor: 0.1
+lr_reduce_patience: 10
+lr_scheduler: null
+max_epochs: 100
+max_lr: 0.15
+max_steps: null
+min_epochs: 1
+min_steps: null
+model_type: massc_average
+momentum: 0.9
+n_attention_units: 256
+n_blocks: 7
+n_channels: 5
+n_classes: 5
+n_jobs: -1
+n_records: -1
+n_rnn_layers: 0
+n_rnn_units: 0
+n_workers: 10
+name: avg_kw21
+num_nodes: 1
+num_processes: 1
+num_sanity_val_steps: 2
+optimizer: adam
+overfit_batches: 0.0
+precision: 32
+prepare_data_per_node: true
+process_position: 0
+profiler: null
+progress_bar_refresh_rate: 1
+reload_dataloaders_every_epoch: false
+replace_sampler_ddp: true
+resume_from_checkpoint: null
+rnn_bidirectional: false
+rnn_dropout: 0
+save_dir: experiments/massc/avg_kw21/20201126_043826
+scaling: robust
+step_size_up: 0.05
+sync_batchnorm: false
+terminate_on_nan: false
+track_grad_norm: -1
+truncated_bptt_steps: null
+val_check_interval: 1.0
+weight_decay: 0
+weights_save_path: null
+weights_summary: top
