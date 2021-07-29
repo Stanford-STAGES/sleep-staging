@@ -460,8 +460,6 @@ def process_data(args):
     data_dirs = args.data_dir.split(",")
 
     # Create folders
-    ensure_dir(args.log_dir)
-    logging.info(f"Placing preprocessing logs in {args.log_dir}")
     logging.info(f"Saving H5 files to {out_dir}")
     ensure_dir(out_dir)
 
@@ -507,6 +505,7 @@ if __name__ == "__main__":
 
     # Create logger
     args.log_dir = os.path.join("logs", "preprocessing", args.cohort, args.encoding)
+    ensure_dir(args.log_dir)
     logging.basicConfig(
         format="%(asctime)s | %(levelname)-8s | %(message)s",
         level=logging.INFO,
@@ -514,6 +513,7 @@ if __name__ == "__main__":
         handlers=[logging.FileHandler(os.path.join(args.log_dir, "preprocessing.log"), "w"), logging.StreamHandler()],
     )
 
+    logging.info(f"Placing preprocessing logs in {args.log_dir}")
     if args.test:
         args.subset = "test"
         args.overlap = 0
