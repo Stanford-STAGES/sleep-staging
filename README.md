@@ -115,7 +115,7 @@ We will use the Danish Center for Sleep Medicine Cohort (DCSM, presented [here][
 Download the DSCM dataset by calling the `fetch_data` routine:
 ```
 python -m preprocessing.download_data.fetch_data -d dcsm \
-                                                 -o data/dcsm/edf
+                                                 -o data/dcsm/edf \
                                                  -n 20
 ```
 This will place the first 20 recordings of the dataset in the `data/dcsm` folder, but you can change this to accomodate your own preferences.
@@ -174,12 +174,12 @@ The following command will train a sleep stage model using the `massc_average` a
 ```
 python train.py --data_dir data/dcsm/raw \
                 --model_type massc_average \
-                --gpus 1
-                --block_type simple
-                --balanced_sampling
-                --n_records 20
-                --scaling robust
-                --name dcsm
+                --gpus 1 \
+                --block_type simple \
+                --balanced_sampling \
+                --n_records 20 \
+                --scaling robust \
+                --name dcsm \
                 --batch_size 32
 ```
 #### Using multiple threads for dataloading
@@ -200,7 +200,8 @@ These are placed in the `experiments/dcsm/predictions/` folder.
 #### Predicting on new data
 If a new dataset is acquired, the user can get predictions for this by running the data preprocessing pipeline above and passing a cohort-path key-val pair to the `predict` command:
 ```
-python predict.py --resume_from_checkpoint experiments/dcsm --predict_on '{"<cohort_name>": "<path_to_cohort>", "<another_cohort_name>": "<path_to_another_cohort>"}'
+python predict.py --resume_from_checkpoint experiments/dcsm \
+                  --predict_on '{"<cohort_name>": "<path_to_cohort>", "<another_cohort_name>": "<path_to_another_cohort>"}'
 ```
 *Note the placement of pings and double pings.*
 
