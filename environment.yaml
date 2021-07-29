@@ -1,4 +1,4 @@
-name: pt1.7
+name: sleep-staging
 channels:
   - pytorch
   - conda-forge
@@ -294,4 +294,4 @@ dependencies:
     - wandb==0.10.23
     - wfdb==3.4.0
     - wrapt==1.12.1
-prefix: /home/groups/mignot/miniconda3/envs/pt1.7
+prefix: /home/groups/mignot/miniconda3/envs/sleep-staging

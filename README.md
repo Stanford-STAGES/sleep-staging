@@ -8,13 +8,14 @@ This is a work in progress, and will be updated regularly.
 1. [How to run](#how-to-run)
 2. [Detailed example](#detailed-example)
 
-<!-- ## Description
+<!-- <!-- ## Description -->
 
-## Installation
-
-### Requirements
-
--->
+## Requirements
+The necessary packages can be installed in a `conda` environment by running the following command from the root directory.
+```
+conda env create -f environment.yaml
+```
+*Note: the installation process may take a couple of minutes*
 
 ## How to run
 
