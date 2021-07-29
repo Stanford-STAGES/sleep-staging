@@ -57,7 +57,7 @@ def getEDFFiles(path2check):
     if os.path.isdir(path2check):
         print("Checking", path2check, "for edf files.")
         # edfFiles = list(p.rglob("*.[EeRr][DdEe][FfCc]"))  # make search case-insensitive
-        edfFiles = glob(os.path.join(path2check, "**/*.[EeRr][DdEe][FfCc]"))
+        edfFiles = glob(os.path.join(path2check, "*.[EeRr][DdEe][FfCc]"))
         print("Removing any MSLT studies.")
         # edfFiles = [edf for edf in edfFiles if not "mslt" in edf.stem.lower()]
         edfFiles = [edf for edf in edfFiles if "mslt" not in os.path.basename(edf.lower())]
