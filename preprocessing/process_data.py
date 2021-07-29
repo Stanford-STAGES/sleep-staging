@@ -22,7 +22,6 @@ from utils.h5_utils import save_h5
 from utils import edf_read_fns
 from utils import load_scored_data
 
-os.chdir("/home/users/alexno/sleep-staging")
 
 cc_sizes = [2, 2, 4, 4, 0.4]
 cc_overlap = 0.25
