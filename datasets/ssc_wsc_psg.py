@@ -215,8 +215,8 @@ class SscWscPsgDataset(Dataset):
         # data = load_psg_h5_data(os.path.join(self.data_dir, self.records[0]))
         self.cache_dir = "data/.cache_large"
         memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
-        # get_data = memory.cache(initialize_record)
-        get_data = initialize_record
+        get_data = memory.cache(initialize_record)
+        # get_data = initialize_record
 
         # Get information about the data
         print(f"Loading mmap data using {n_jobs} workers:")
@@ -227,7 +227,6 @@ class SscWscPsgDataset(Dataset):
                 adjustment=self.adjustment,
                 overlap=self.overlap,
                 sequence_length=self.sequence_length,
-                balanced_sampling=self.balanced_sampling,
             )
             for record in self.records
         )
@@ -384,13 +383,18 @@ class SscWscPsgDataset(Dataset):
     def __getitem__(self, idx):
 
         try:
-            # Grab data
             current_record = self.index_to_record[idx]["record"]
-            scaler = self.scalers[current_record]
-            if self.balanced_sampling:
-                class_choice = np.random.choice(list(self.record_class_indices[current_record].keys()))
-                current_sequence = np.random.choice(self.record_class_indices[current_record][class_choice])
+            # If using balanced sampling, we skip the idx and choose from records directly in the training data
+            if current_record in set(self.train_data.records) and self.balanced_sampling:
+                current_record = np.random.choice(self.train_data.records)
+                scaler = self.scalers[current_record]
+                while True:
+                    class_choice = np.random.choice(list(self.record_class_indices[current_record].keys()))
+                    if self.record_class_indices[current_record][class_choice]:
+                        current_sequence = np.random.choice(self.record_class_indices[current_record][class_choice])
+                        break
             else:
+                scaler = self.scalers[current_record]
                 current_sequence = self.index_to_record[idx]["idx"]
             stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze()
 
