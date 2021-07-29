@@ -203,34 +203,28 @@ class BaseDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        try:
-            current_record = self.index_to_record[idx]["record"]
-            # If using balanced sampling, we skip the idx and choose from records directly in the training data
-            if current_record in set(self.train_data.records) and self.balanced_sampling:
-                current_record = np.random.choice(self.train_data.records)
-                scaler = self.scalers[current_record]
-                while True:
-                    class_choice = np.random.choice(list(self.record_class_indices[current_record].keys()))
-                    if self.record_class_indices[current_record][class_choice]:
-                        current_sequence = np.random.choice(self.record_class_indices[current_record][class_choice])
-                        break
-            else:
-                scaler = self.scalers[current_record]
-                current_sequence = self.index_to_record[idx]["idx"]
-            stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze()
+        current_record = self.index_to_record[idx]["record"]
+        # If using balanced sampling, we skip the idx and choose from records directly in the training data
+        if self.balanced_sampling and current_record in set(self.train_data.records):
+            current_record = np.random.choice(self.train_data.records)
+            scaler = self.scalers[current_record]
+            while True:
+                class_choice = np.random.choice(list(self.record_class_indices[current_record].keys()))
+                if self.record_class_indices[current_record][class_choice]:
+                    current_sequence = np.random.choice(self.record_class_indices[current_record][class_choice])
+                    break
+        else:
+            scaler = self.scalers[current_record]
+            current_sequence = self.index_to_record[idx]["idx"]
+        stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze()
 
-            if isinstance(self.sequence_length, str) and self.sequence_length == "full":
-                current_sequence = slice(None)
+        if isinstance(self.sequence_length, str) and self.sequence_length == "full":
+            current_sequence = slice(None)
 
-            # Grab data
-            with File(os.path.join(self.data_dir, current_record), "r") as f:
-                x = f["M"][current_sequence].astype("float32")
-                t = f["L"][current_sequence].astype("uint8").squeeze()
-            # x = self.data[current_record]['data'][current_sequence]
-            # t = self.data[current_record]['target'][current_sequence]
-
-        except IndexError:
-            print("Bug")
+        # Grab data
+        with File(os.path.join(self.data_dir, current_record), "r") as f:
+            x = f["M"][current_sequence].astype("float32")
+            t = f["L"][current_sequence].astype("uint8").squeeze()
 
         if np.isnan(x).any():
             print("NaNs detected!")
