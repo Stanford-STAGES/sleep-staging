@@ -29,7 +29,10 @@ cc_overlap = 0.25
 try:
     df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
 except FileNotFoundError:
-    df = pd.read_csv("data_master.csv")
+    try:
+        df = pd.read_csv("data_master.csv")
+    except FileNotFoundError:
+        df = None
 
 noiseM = sio.loadmat("preprocessing/noiseM.mat", squeeze_me=True, mat_dtype=False)["noiseM"]
 meanV = noiseM["meanV"].item()
@@ -398,27 +401,32 @@ def assign_files(listF, cohort, test=None, list_slice=None):
     listed_as_test = []
     logging.info("Assigning files (optionally based on data master)")
     for current_file in tqdm(listF):
-        if cohort == "ihc":
-            current_fid = os.path.basename(current_file).split(".")[0][:5]
-            id_col = "ID_Ling"
+        if df is not None:
+            if cohort == "ihc":
+                current_fid = os.path.basename(current_file).split(".")[0][:5]
+                id_col = "ID_Ling"
+            else:
+                current_fid = os.path.basename(current_file).split(".")[0]
+                id_col = "FileID"
+            # Some of the KHC ID's have a prepended 0, this removes it
+            if (cohort == "khc") and (
+                df[df[id_col] == current_fid].empty and not df[df[id_col] == current_fid.lstrip("0")].empty
+            ):
+                current_fid = current_fid.lstrip("0")
+            # The subject is not in the overview file
+            if df[df[id_col] == current_fid].empty:
+                not_listed.append(current_file)
+            elif (df[df[id_col] == current_fid]["Sleep scoring training data"] == 1).bool():
+                # elif (not (df.query(f'ID == "{current_fid}"')["Sleep scoring training data"] == 1).bool()) or (df.query(f'ID_Ling == "{current_fid}"')["Sleep scoring training data"] == 1).bool():
+                listed_as_train.append(current_file)
+            # elif (df.query(f'ID == "{current_fid}"')["Sleep scoring test data"] == 1).bool() or (df.query()).bool():
+            #     listed_as_test.append(current_file)
+            else:
+                listed_as_test.append(current_file)
+                # logging.info(f"Hmm... Something is wrong with {current_file}!")
+                # something_wrong.append(current_file)
         else:
-            current_fid = os.path.basename(current_file).split(".")[0]
-            id_col = "FileID"
-        # Some of the KHC ID's have a prepended 0, this removes it
-        if (cohort == "khc") and (df[df[id_col] == current_fid].empty and not df[df[id_col] == current_fid.lstrip("0")].empty):
-            current_fid = current_fid.lstrip("0")
-        # The subject is not in the overview file
-        if df[df[id_col] == current_fid].empty:
             not_listed.append(current_file)
-        elif (df[df[id_col] == current_fid]["Sleep scoring training data"] == 1).bool():
-            # elif (not (df.query(f'ID == "{current_fid}"')["Sleep scoring training data"] == 1).bool()) or (df.query(f'ID_Ling == "{current_fid}"')["Sleep scoring training data"] == 1).bool():
-            listed_as_train.append(current_file)
-        # elif (df.query(f'ID == "{current_fid}"')["Sleep scoring test data"] == 1).bool() or (df.query()).bool():
-        #     listed_as_test.append(current_file)
-        else:
-            listed_as_test.append(current_file)
-            # logging.info(f"Hmm... Something is wrong with {current_file}!")
-            # something_wrong.append(current_file)
     original_list = listF
     if test:
         if cohort in ["ihc", "dhc", "ahc"]:  # IHC data should only be placed in test
