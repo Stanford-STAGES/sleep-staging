@@ -506,9 +506,9 @@ if __name__ == "__main__":
     # Create logger
     args.log_dir = os.path.join("logs", "preprocessing", args.cohort, args.encoding)
     ensure_dir(args.log_dir)
-    stream_handler = logging.StreamHandler()
+    stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(logging.INFO)
-    stream_handler.setFormat("%(asctime)s | %(levelname)-8s | %(message)s", datefmt="%I:%M:%S")
+    stream_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-8s | %(message)s", datefmt="%I:%M:%S"))
     logging.basicConfig(
         filename=os.path.join(args.log_dir, "preprocessing.log"),
         format="%(asctime)s | %(levelname)-8s | %(message)s",
