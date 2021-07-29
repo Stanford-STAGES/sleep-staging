@@ -507,10 +507,11 @@ if __name__ == "__main__":
     args.log_dir = os.path.join("logs", "preprocessing", args.cohort, args.encoding)
     ensure_dir(args.log_dir)
     logging.basicConfig(
+        filename=os.path.join(args.log_dir, "preprocessing.log"),
         format="%(asctime)s | %(levelname)-8s | %(message)s",
         level=logging.INFO,
         datefmt="%I:%M:%S",
-        handlers=[logging.FileHandler(os.path.join(args.log_dir, "preprocessing.log"), "w"), logging.StreamHandler()],
+        # handlers=[logging.FileHandler(os.path.join(args.log_dir, "preprocessing.log"), "w"), logging.StreamHandler()],
     )
 
     logging.info(f"Placing preprocessing logs in {args.log_dir}")
