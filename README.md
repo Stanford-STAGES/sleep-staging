@@ -172,7 +172,7 @@ This will place the H5 files in the `data/dcsm/raw` folder corresponding to the 
 ### Run training procedure
 The following command will train a sleep stage model using the `massc_average` architecture on the DSCM data:
 ```
-python train.py -d data/dcsm/raw \
+python train.py --data_dir data/dcsm/raw \
                 --model_type massc_average \
                 --gpus 1
                 --block_type simple
@@ -180,6 +180,7 @@ python train.py -d data/dcsm/raw \
                 --n_records 20
                 --scaling robust
                 --name dcsm
+                --batch_size 32
 ```
 #### Using multiple threads for dataloading
 By default, the datamodule will use only the main process for the train and eval data loaders.
