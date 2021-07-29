@@ -201,7 +201,7 @@ class SscWscPsgDataset(Dataset):
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
         # self.data = {r: [] for r in self.records}
         # self.index_to_record = []
-        self.index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
+        # self.index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
         # self.record_to_index = []
         # self.record_indices = {r: None for r in self.records}
         # self.scalers = {r: None for r in self.records}
@@ -215,8 +215,8 @@ class SscWscPsgDataset(Dataset):
         # data = load_psg_h5_data(os.path.join(self.data_dir, self.records[0]))
         self.cache_dir = "data/.cache_large"
         memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
-        get_data = memory.cache(initialize_record)
-        # get_data = initialize_record
+        # get_data = memory.cache(initialize_record)
+        get_data = initialize_record
 
         # Get information about the data
         print(f"Loading mmap data using {n_jobs} workers:")
@@ -270,12 +270,10 @@ class SscWscPsgDataset(Dataset):
         # sorted_data = ParallelExecutor(n_jobs=-1, prefer="threads")(total=len(self.records), desc="Processing")(
         #     delayed(sort_record_data)(record, d) for record, d in zip(self.records, data)
         # )
-        self.record_indices = dict(
-            [s["record_indices"] for s in sorted_data]
-        )  # This contains the indices for each record (i.e. index 0 maps to first sequence of recording 1 etc.)
-        self.record_class_indices = dict(
-            [s["record_class_indices"] for s in sorted_data]
-        )  # This holds the sequence indices containing each stage in reach record
+        # This contains the indices for each record (i.e. index 0 maps to first sequence of recording 1 etc.)
+        self.record_indices = dict([s["record_indices"] for s in sorted_data])
+        # This holds the sequence indices containing each stage in reach record
+        self.record_class_indices = dict([s["record_class_indices"] for s in sorted_data])
         self.scalers = dict([s["scalers"] for s in sorted_data])
         self.stable_sleep = dict([s["stable_sleep"] for s in sorted_data])
         self.index_to_record = [sub for s in sorted_data for sub in s["index_to_record"]]
