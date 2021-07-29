@@ -59,6 +59,7 @@ def run_predict():
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
+    ds_args = model.hparams
     if args.predict_on:
         test_dm = []
         test_args = dict(
@@ -70,6 +71,7 @@ def run_predict():
             n_jobs=ds_args.n_jobs,
             sequence_length="full",
             n_channels=ds_args.n_channels,
+            balanced_sampling=False,
         )
         # test_dm.append(("DHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/dhc/raw"}, **test_args)),)
         # test_dm.append(("IHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ihc/raw"}, **test_args)),)
@@ -80,7 +82,6 @@ def run_predict():
         for dm in test_dm:
             dm[1].setup("test")
     else:
-        ds_args = model.hparams
         ds_args["balanced_sampling"] = False  # This should not be set on eval data
         ds_args["batch_size"] = 1
         ds_args["sequence_length"] = "full"
