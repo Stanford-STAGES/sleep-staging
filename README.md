@@ -5,10 +5,9 @@ This repository contains source code used for training sleep stage detection mod
 This is a work in progress, and will be updated regularly.
 
 ## Table of contents
-1. [How to run](#how-to-run)
-2. [Detailed example](#detailed-example)
-
-<!-- <!-- ## Description -->
+1. [Requirements](#requirements)
+2. [How to run](#how-to-run)
+3. [Example run](#detailed-example)
 
 ## Requirements
 The necessary packages can be installed in a `conda` environment by running the following command from the root directory.
