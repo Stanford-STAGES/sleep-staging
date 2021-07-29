@@ -59,32 +59,8 @@ def run_predict():
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
-    test_dm = []
-    ds_args = model.hparams
-    ds_args["balanced_sampling"] = False  # This should not be set on eval data
-    ds_args["batch_size"] = 1
-    ds_args["sequence_length"] = "full"
-    ds_args["n_workers"] = args.n_workers
-    # ds_args["data_dir"] = "data/train"
-    # ds_args["n_jobs"] = args.n_jobs
-    # ds_args["n_records"] = None
-    # ds_args["batch_size"] = args.batch_size
-    # ds_args["limit_test_batches"] = args.limit_test_batches
-    # ds_args["adjustment"] = args.adjustment
-    # ds_args["sequence_length"] = args.sequence_length
-
-    eval_dm = ("eval", datasets.SscWscDataModule(**ds_args))
-    eval_dm[1].setup("fit")
-
-    # test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
-    # test_dm[-1][1].setup("test")
-
-    # test_dm.append(("SSC-WSC_more-spindles", datasets.SscWscDataModule(**ds_args)),)
-    # test_dm[-1][1].setup("test")
-    # khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
-    # test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
-    # test_dm[-1][1].setup("test")
     if args.predict_on:
+        test_dm = []
         test_args = dict(
             batch_size=1,
             n_workers=args.n_workers,
@@ -103,6 +79,31 @@ def run_predict():
         # test_dm.append(("AHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ahc/raw"}, **test_args)),)
         for dm in test_dm:
             dm[1].setup("test")
+    else:
+        ds_args = model.hparams
+        ds_args["balanced_sampling"] = False  # This should not be set on eval data
+        ds_args["batch_size"] = 1
+        ds_args["sequence_length"] = "full"
+        ds_args["n_workers"] = args.n_workers
+        # ds_args["data_dir"] = "data/train"
+        # ds_args["n_jobs"] = args.n_jobs
+        # ds_args["n_records"] = None
+        # ds_args["batch_size"] = args.batch_size
+        # ds_args["limit_test_batches"] = args.limit_test_batches
+        # ds_args["adjustment"] = args.adjustment
+        # ds_args["sequence_length"] = args.sequence_length
+
+        test_dm = ("eval", datasets.SscWscDataModule(**ds_args))
+        test_dm[1].setup("fit")
+
+        # test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
+        # test_dm[-1][1].setup("test")
+
+        # test_dm.append(("SSC-WSC_more-spindles", datasets.SscWscDataModule(**ds_args)),)
+        # test_dm[-1][1].setup("test")
+        # khc_args = datasets.KHCDataModule.add_dataset_specific_args(ArgumentParser()).parse_known_args()[0]
+        # test_dm.append(("KHC", datasets.KHCDataModule(**vars(khc_args))),)
+        # test_dm[-1][1].setup("test")
 
     for name, tdm in test_dm:
         # predictions = trainer.test(model, test_dataloaders=tdl, verbose=False)[0]
