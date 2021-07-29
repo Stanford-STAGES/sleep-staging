@@ -59,38 +59,38 @@ def download_and_validate(download_url, sha256, out_path):
     #     raise ValueError(f"Invalid sha256 for file at {download_url} " f"(please restart download)")
 
 
-def get_n_first(file_names, checksums, N_first):
+def get_n_first(file_names, checksums, n_first):
     """
-    Given a list of file_names and a list of checksums, returns the 'N_first'
+    Given a list of file_names and a list of checksums, returns the 'n_first'
     items from both lists as a zip object.
 
     :param file_names: list of file names
     :param checksums: list of sha256 checksums
-    :param N_first: int or None. If None, all items are returned
-    :return: zipped N_first first items of file_names and checksums
+    :param n_first: int or None. If None, all items are returned
+    :return: zipped n_first first items of file_names and checksums
     """
     zipped = list(zip(file_names, checksums))
-    N_first = int(N_first) if N_first is not None else len(file_names)
-    zipped = zipped[:N_first]
+    n_first = int(n_first) if n_first is not None else len(file_names)
+    zipped = zipped[:n_first]
     return zipped
 
 
-def download_dataset(out_dataset_folder, server_url, checksums_path, paths_func, N_first=None):
+def download_dataset(out_dataset_folder, server_url, checksums_path, paths_func, n_first=None):
     """
     Download a dataset into 'out_dataset_folder' by fetching files at URL 'server_url' according to
-    the list of checksums and filenames in file 'checksums_path'. Only downloads the N_first subject folders
-    if 'N_first' is specified.
+    the list of checksums and filenames in file 'checksums_path'. Only downloads the n_first subject folders
+    if 'n_first' is specified.
 
     'paths_func' should be a callable of signature func(file_name, server_url, out_dataset_folder) which returns:
         1) download_url (path to fetch file from on remote system)
         2) out_file_path (path to store file on local system)
     """
     checksums, file_names = get_checksums_and_file_names(checksums_path)
-    zipped = get_n_first(file_names, checksums, N_first)
+    zipped = get_n_first(file_names, checksums, n_first)
     for i, (file_name, sha256) in enumerate(zipped):
-        fname, ext = file_name.split('.')
-        if ext == 'h5':
-            file_name = '.'.join([fname, 'edf'])
+        fname, ext = file_name.split(".")
+        if ext == "h5":
+            file_name = ".".join([fname, "edf"])
         print(f"Downloading {file_name} ({i + 1}/{len(zipped)})")
         download_url, out_file_path = paths_func(file_name, server_url, out_dataset_folder)
         out_file_path = Path(out_file_path)
