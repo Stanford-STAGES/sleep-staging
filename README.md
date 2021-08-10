@@ -125,7 +125,7 @@ python -m utils.channel_label_identifier -d data/dcsm/edf \
                                          -o utils/channel_dicts/dcsm.json \
                                          -c C3 C4 O1 O2 EOGL EOGR EMG A1 A2 EOGRef EMGRef
 ```
-Before running the preprocessing pipeline, we add the following function in `utils/edf_utils.py` in order to use the correct channel mapping JSON
+<!-- Before running the preprocessing pipeline, we add the following function in `utils/edf_utils.py` in order to use the correct channel mapping JSON
 (we also remember to add the `{"dcsm": load_edf_dcsm}` key-val pair to the `edf_read_fns` in `utils/__init__.py`):
 ```
 def load_edf_dcsm(filepath, fs):
@@ -134,7 +134,7 @@ def load_edf_dcsm(filepath, fs):
         channel_dict = json.load(json_file)
 
     return load_edf(filepath, fs, channel_dict)
-```
+``` -->
 The following function is added to `utils/sta_utils.py` to load correct hypnograms (DCSM hypnograms are in .ids format (Index/Duration/Stage)):
 ```
 def load_hypnogram_ids(hyp_file):
@@ -155,7 +155,7 @@ def load_hypnogram_ids(hyp_file):
 
     return np.asarray(hypnogram)[:, np.newaxis]
 ```
-Similar to above, we remember to add `{"dcsm": load_hypnogram_ids}` to `hypnogram_read_fns` in `utils/sta_utils.py`.
+We remember to add `{"dcsm": load_hypnogram_ids}` to `hypnogram_read_fns` in `utils/sta_utils.py`.
 The preprocessing pipeline which resamples, filters, and segments the PSG data can finally run by the following command:
 ```
 python -m preprocessing.process_data -d data/dcsm/edf \
@@ -164,7 +164,8 @@ python -m preprocessing.process_data -d data/dcsm/edf \
                                      --seq_len 10 \
                                      --overlap 5 \
                                      --fs 128 \
-                                     -c dcsm
+                                     --channel_map_file utils/channel_dicts/dcsm.json \
+                                     -c dcsm \
 ```
 This will place the H5 files in the `data/dcsm/raw` folder corresponding to the type of encoding.
 
