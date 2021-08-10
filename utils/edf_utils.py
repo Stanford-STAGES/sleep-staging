@@ -225,3 +225,11 @@ def load_edf_template(filepath, fs):
         channel_dict = json.load(json_file)
 
     return load_edf(filepath, fs, channel_dict)
+
+
+def load_edf_mapfile(filepath, fs, channel_map_file):
+
+    with open(channel_map_file) as json_file:
+        channel_dict = json.load(json_file)
+
+    return load_edf(filepath, fs, channel_dict)

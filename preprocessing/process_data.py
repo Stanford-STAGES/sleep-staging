@@ -19,7 +19,8 @@ from scipy.fft import ifft
 from tqdm import tqdm
 
 from utils.h5_utils import save_h5
-from utils import edf_read_fns
+# from utils import edf_read_fns
+from utils import load_edf_mapfile
 from utils import load_scored_data
 
 
@@ -173,10 +174,11 @@ def encode_data(x1, x2, dim, slide, fs):
     return C
 
 
-def load_signals(edf_file, fs, cohort, encoding):
+def load_signals(edf_file, fs, cohort, encoding, channel_map_file):
 
     logging.info("\tLoading EDF header")
-    temp_data, cFs, channel_labels = edf_read_fns[cohort](edf_file, fs)
+    # temp_data, cFs, channel_labels = edf_read_fns[cohort](edf_file, fs)
+    temp_data, cFs, channel_labels = load_edf_mapfile(edf_file, fs, channel_map_file)
 
     if encoding == "cc":  # TODO: this is broken
         # Resampling data. Filter coefficients are pulled from MATLAB
@@ -256,7 +258,7 @@ def ensure_dir(dir_path):
     logging.info(f"Creating directory: {dir_path}")
 
 
-def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc"):
+def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc", channel_map_file=None):
 
     logging.info("\tLoading hypnogram")
     hyp = load_scored_data(current_file.split(".")[0], cohort=cohort)
@@ -268,7 +270,7 @@ def process_single_file(current_file, fs, seq_len, overlap, cohort, encoding="cc
     # raise MissingHypnogramError(os.path.basename(current_file))
 
     logging.info("\tLoading signals from PSG file")
-    sig = load_signals(current_file, fs, cohort, encoding)
+    sig = load_signals(current_file, fs, cohort, encoding, channel_map_file)
     logging.info(f"\tPSG data shape: {sig.shape}")
     hyp = hyp[: len(sig[0]) // (fs * 30), :]
 
@@ -473,7 +475,9 @@ def process_data(args):
     logging.info(f"Processing and saving {len(listF)} files")
     for i, filename in enumerate(tqdm(listF)):
         logging.info(f"Current file: {filename}")
-        M, L, W, Z, _, _ = process_single_file(filename, fs, seq_len, overlap, cohort, encoding=encoding)
+        M, L, W, Z, _, _ = process_single_file(
+            filename, fs, seq_len, overlap, cohort, encoding=encoding, channel_map_file=args.channel_map_file
+        )
 
         if cohort in ["dcsm"]:
             save_name = os.path.join(out_dir, os.path.dirname(filename).split(os.path.sep)[-1] + ".h5")
@@ -500,6 +504,7 @@ if __name__ == "__main__":
     parser.add_argument('--mix', action="store_true", help='If passed, will create new H5 files containing mixes of already processed files.')
     parser.add_argument('--test', action="store_true", default=False, help='Flag to signal test data.\nThis will ignore passed overlap argument and set overlap to 0.')
     parser.add_argument('--slice', type=lambda s: slice(*[int(e) if e.strip() else None for e in s.split(":")]), help='Run over a selection of subjects only.\nEg. passing `--slice 10:20` will process subjects 10 through 19.')
+    parser.add_argument('--channel_map_file', type=str, required=True, help='Path to JSON file containing the channel mapping.')
     args = parser.parse_args()
     # fmt: on
 
