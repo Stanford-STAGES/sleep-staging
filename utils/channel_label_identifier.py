@@ -21,9 +21,9 @@
 # @date 2/20/2018
 
 import argparse
+import glob
 import json
 import os
-from glob import glob
 import sys
 from collections import Counter
 from pathlib import Path
@@ -57,7 +57,7 @@ def getEDFFiles(path2check):
     if os.path.isdir(path2check):
         print("Checking", path2check, "for edf files.")
         # edfFiles = list(p.rglob("*.[EeRr][DdEe][FfCc]"))  # make search case-insensitive
-        edfFiles = glob(os.path.join(path2check, "*.[EeRr][DdEe][FfCc]"))
+        edfFiles = glob.glob(os.path.join(path2check, "**", "*.[EeRr][DdEe][FfCc]"), recursive=True)
         print("Removing any MSLT studies.")
         # edfFiles = [edf for edf in edfFiles if not "mslt" in edf.stem.lower()]
         edfFiles = [edf for edf in edfFiles if "mslt" not in os.path.basename(edf.lower())]
