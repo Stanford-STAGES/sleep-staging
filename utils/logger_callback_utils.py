@@ -19,7 +19,7 @@ def get_loggers_callbacks(args, model=None):
             save_dir=args.save_dir,
         )
         loggers = [
-            pl_loggers.CSVLogger(**csv_logger_params),
+            # pl_loggers.CSVLogger(**csv_logger_params),
             pl_loggers.WandbLogger(**wandb_logger_params),
         ]
         # if model:
@@ -27,7 +27,9 @@ def get_loggers_callbacks(args, model=None):
 
         # Setup callback(s) params
         checkpoint_monitor_params = dict(
-            filepath=os.path.join(args.save_dir, "{epoch:03d}-{eval_loss:.2f}"),
+            # filepath=os.path.join(args.save_dir, "{epoch:03d}-{eval_loss:.2f}"),
+            filename="{epoch:03d}",
+            dirpath=args.save_dir,
             monitor=args.checkpoint_monitor,
             save_last=True,
             save_top_k=1,
