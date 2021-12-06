@@ -76,7 +76,8 @@ def get_args(stage="train", print_args=False):
                 args.save_dir = os.path.join("experiments", args.model_type, args.model_name,)
             else:
                 args.save_dir = os.path.join("experiments", args.model_type, args.model_name, args.name,)
-
+        else:
+            args.save_dir = os.path.join("experiments", args.model_type, datetime.now().strftime("%Y%m%d_%H%M%S"))
         if int(os.environ.get("LOCAL_RANK", 0)) == 0:
             os.makedirs(args.save_dir, exist_ok=True)
     else:
