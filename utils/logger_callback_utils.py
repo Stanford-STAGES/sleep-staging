@@ -8,15 +8,16 @@ def get_loggers_callbacks(args, model=None):
 
     try:
         # Setup logger(s) params
-        csv_logger_params = dict(
-            save_dir="./experiments", name=os.path.join(*args.save_dir.split("/")[1:-1]), version=args.save_dir.split("/")[-1],
-        )
+        # csv_logger_params = dict(
+        #     save_dir="./experiments", name=os.path.join(*args.save_dir.split("/")[1:-1]), version=args.save_dir.split("/")[-1],
+        # )
         wandb_logger_params = dict(
             log_model=False,
             name=os.path.join(*args.save_dir.split("/")[1:]),
             offline=args.debug,
             project="sleep-staging",
             save_dir=args.save_dir,
+            entity="narcolepsy-ml-group",
         )
         loggers = [
             # pl_loggers.CSVLogger(**csv_logger_params),
@@ -33,6 +34,7 @@ def get_loggers_callbacks(args, model=None):
             monitor=args.checkpoint_monitor,
             save_last=True,
             save_top_k=1,
+            mode="min" if "loss" in args.checkpoint_monitor else "max",
         )
         # earlystopping_parameters = dict(monitor=args.earlystopping_monitor, patience=args.earlystopping_patience,)
         callbacks = [
