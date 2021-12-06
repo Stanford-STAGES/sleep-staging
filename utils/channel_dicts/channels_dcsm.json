@@ -1,0 +1,56 @@
+{
+    "A1": [],
+    "A2": [],
+    "C3": [
+        "C3-M2"
+    ],
+    "C4": [
+        "C4-M1"
+    ],
+    "EMG": [
+        "CHIN"
+    ],
+    "EMGRef": [],
+    "EOGL": [
+        "E1-M2"
+    ],
+    "EOGR": [
+        "E2-M2"
+    ],
+    "EOGRef": [],
+    "O1": [
+        "O1-M2"
+    ],
+    "O2": [
+        "O2-M1"
+    ],
+    "categories": [
+        "C3",
+        "C4",
+        "O1",
+        "O2",
+        "EOGL",
+        "EOGR",
+        "EMG",
+        "A1",
+        "A2",
+        "EOGRef",
+        "EMGRef"
+    ],
+    "edfFiles": [
+        "data/dcsm/edf/tp026536b7_b8d5_44a5_adc6_87617520d5f2/psg.edf",
+        "data/dcsm/edf/tp00e1be55_004f_4c9c_948a_6627c115c825/psg.edf",
+        "data/dcsm/edf/tp05370bc3_4225_493f_9da9_b075601a8d2b/psg.edf",
+        "data/dcsm/edf/tp01c676ec_aa20_4975_9d96_5bb0d503545a/psg.edf",
+        "data/dcsm/edf/tp06c03d18_1fa4_471e_a9f4_971290f06b1c/psg.edf",
+        "data/dcsm/edf/tp078634bb_a70f_49b2_91dc_304ac0163906/psg.edf",
+        "data/dcsm/edf/tp04c9d3b3_562e_477a_b806_ba4856e6c534/psg.edf",
+        "data/dcsm/edf/tp08647ee4_6119_4824_aee4_07a62ce757b3/psg.edf",
+        "data/dcsm/edf/tp027286c8_f599_4ebf_9f59_64a66afad775/psg.edf",
+        "data/dcsm/edf/tp099e5fe5_4d10_4ba4_ad89_4b0786039b0c/psg.edf",
+        "data/dcsm/edf/tp00c5869f_db8e_4b13_8c20_1a77b1bdc261/psg.edf",
+        "data/dcsm/edf/tp073c0dd9_c600_4f18_8346_b02dd432093d/psg.edf",
+        "data/dcsm/edf/tp005f7e68_a084_46bb_9f0a_b6a084155a1c/psg.edf"
+    ],
+    "pathname": "data/dcsm/edf"
+}
