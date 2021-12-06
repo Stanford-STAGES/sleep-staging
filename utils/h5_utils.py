@@ -158,8 +158,12 @@ def initialize_record(filename, scaling=None, overlap=True, adjustment=30, seque
     hyp_shape = hypnogram.shape
     sequences_in_file = N
 
+    # Remember 50% overlap between segments
     if scaler:
-        scaler.fit(X.transpose(1, 0, 2).reshape((C, N * T)).T)
+        if overlap:
+            scaler.fit(X[::2].transpose(1, 0, 2).reshape((C, -1)).T)
+        else:
+            scaler.fit(X.transpose(1, 0, 2).reshape((C, -1)).T)
 
     # Remember that the output array from the H5 has 50 % overlap between segments.
     # Use the following to split into even and odd
@@ -200,6 +204,29 @@ def initialize_record(filename, scaling=None, overlap=True, adjustment=30, seque
         hypnogram = (hypnogram.transpose(2, 0, 1).reshape(shape[2], -1).T)[np.newaxis]
         stable_sleep = (stable_sleep.transpose(2, 0, 1).reshape(shape[2], -1).T)[np.newaxis]
         sequences_in_file = hypnogram.shape[0]
+    # elif isinstance(sequence_length, int) and sequence_length != 5:
+
+    #     def __resequence(input_sequence, new_sequence_length):
+    #         N, M, C = input_sequence.shape
+    #         input_sequence = input_sequence.transpose(2, 0, 1).reshape(C, -1).T
+    #         input_sequence = input_sequence[: (input_sequence.shape[0] // new_sequence_length) * new_sequence_length]
+    #         input_sequence = input_sequence.T.reshape(C, -1, new_sequence_length).transpose(1, 2, 0)
+    #         return input_sequence
+
+    #     if overlap:
+    #         hyp_even = hypnogram[0::2]
+    #         hyp_odd = hypnogram[1::2]
+    #         hyp_even = __resequence(hyp_even, 2 * sequence_length)
+    #         hyp_odd = __resequence(hyp_odd, 2 * sequence_length)
+    #         hypnogram = np.concatenate([hyp_even, hyp_odd], axis=0)
+    #         stable_sleep_even = stable_sleep[0::2]
+    #         stable_sleep_odd = stable_sleep[1::2]
+    #         stable_sleep_even = __resequence(stable_sleep_even, 2 * sequence_length)
+    #         stable_sleep_odd = __resequence(stable_sleep_odd, 2 * sequence_length)
+    #         stable_sleep = np.concatenate([stable_sleep_even, stable_sleep_odd], axis=0)
+    #     else:
+    #         hypnogram = __resequence(hypnogram, 2 * sequence_length)
+    #         stable_sleep = __resequence(stable_sleep, 2 * sequence_length)
 
     sorted_data = sort_record_data(os.path.basename(filename), hypnogram, scaler, stable_sleep, bin_counts)
 

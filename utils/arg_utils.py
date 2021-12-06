@@ -52,6 +52,14 @@ def get_args(stage="train", print_args=False):
     # parse params
     args = parser.parse_args()
 
+    # Check the sequence length argument
+    if isinstance(args.sequence_length, str) and args.sequence_length != "full":
+        try:
+            args.sequence_length = int(args.sequence_length)
+        except:
+            print(f"args.sequence_length={args.sequence_length} can't be converted to int, set to default value.")
+            args.sequence_length = 5
+
     # update args from hparams
     if args.resume_from_checkpoint:
         args.model_type = hparams["model_type"]
@@ -108,6 +116,10 @@ def get_args(stage="train", print_args=False):
     # if stage == "predict":
     #     if temp_args.n_workers is not None:
     #         args.n_workers = temp_args.n_workers
+
+    # Iff sequence_length is full, we can only accept batch_size 1
+    if isinstance(args.sequence_length, str):
+        assert args.batch_size == 1, f"Can only use batch_size==1 when sequence_length=='full'"
 
     if print_args:
         pprint.pprint(vars(args), indent=4)
