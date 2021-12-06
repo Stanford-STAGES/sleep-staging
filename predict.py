@@ -1,6 +1,7 @@
 import os
 import pprint
 import pickle
+import sys
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
@@ -59,20 +60,26 @@ def run_predict():
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
-    ds_args = model.hparams
+    ds_args = model.hparams.copy()
     if args.predict_on:
         test_dm = []
-        test_args = dict(
-            batch_size=1,
-            n_workers=args.n_workers,
-            n_records=10,
-            scaling="robust",
-            adjustment=0,
-            n_jobs=ds_args.n_jobs,
-            sequence_length="full",
-            n_channels=ds_args.n_channels,
-            balanced_sampling=False,
-        )
+        test_args = ds_args.copy()
+        test_args.update({k[2:]: vars(args)[k[2:]] for k in sys.argv[1::2]})
+        test_args["balanced_sampling"] = False
+        test_args["batch_size"] = 1
+        test_args["sequence_length"] = "full"
+        test_args["adjustment"] = 0
+        # test_args = dict(
+        #     batch_size=1,
+        #     n_workers=args.n_workers,
+        #     n_records=10,
+        #     scaling="robust",
+        #     adjustment=0,
+        #     n_jobs=ds_args.n_jobs,
+        #     sequence_length="full",
+        #     n_channels=ds_args.n_channels,
+        #     balanced_sampling=False,
+        # )
         # test_dm.append(("DHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/dhc/raw"}, **test_args)),)
         # test_dm.append(("IHC", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ihc/raw"}, **test_args)),)
         for cohort, data_path in args.predict_on.items():
@@ -82,22 +89,38 @@ def run_predict():
         for dm in test_dm:
             dm[1].setup("test")
     else:
+        ds_args.update({k[2:]: vars(args)[k[2:]] for k in sys.argv[1::2]})
         ds_args["balanced_sampling"] = False  # This should not be set on eval data
         ds_args["batch_size"] = 1
         ds_args["sequence_length"] = "full"
-        ds_args["n_workers"] = args.n_workers
+        # ds_args["n_workers"] = args.n_workers
+        # ds_args["n_jobs"] = args.n_jobs
+        # ds_args["gpus"] = args.gpus
         # ds_args["data_dir"] = "data/train"
         # ds_args["n_jobs"] = args.n_jobs
-        # ds_args["n_records"] = None
+        # ds_args["n_records"] = 2
         # ds_args["batch_size"] = args.batch_size
         # ds_args["limit_test_batches"] = args.limit_test_batches
         # ds_args["adjustment"] = args.adjustment
         # ds_args["sequence_length"] = args.sequence_length
+        test_dm = []
+        # test_dm.append(("eval", datasets.SscWscDataModule(**ds_args)))
+        # test_dm[-1][1].setup("fit")
 
-        test_dm = ("eval", datasets.SscWscDataModule(**ds_args))
-        test_dm[1].setup("fit")
+        test_dm.append(("test", datasets.SscWscDataModule(**ds_args)),)
+        test_dm[-1][1].setup("test")
 
-        # test_dm.append(("SSC-WSC_test", datasets.SscWscDataModule(**ds_args)),)
+        # test_args = ds_args.copy()
+        # test_args.pop("data_dir")
+        # # test_dm.append(("ahc", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ahc/raw"}, **test_args)),)
+        # # test_dm[-1][1].setup("test")
+        # test_dm.append(("dhc", datasets.BaseDataModule(data_dir={"train": None, "test": "data/dhc/raw"}, **test_args)),)
+        # test_dm[-1][1].setup("test")
+        # test_dm.append(("ihc", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ihc/raw"}, **test_args)),)
+        # test_dm[-1][1].setup("test")
+        # test_dm.append(("jcts", datasets.BaseDataModule(data_dir={"train": None, "test": "data/jcts/raw"}, **test_args)),)
+        # test_dm[-1][1].setup("test")
+        # test_dm.append(("khc", datasets.BaseDataModule(data_dir={"train": None, "test": "data/khc/raw"}, **test_args)),)
         # test_dm[-1][1].setup("test")
 
         # test_dm.append(("SSC-WSC_more-spindles", datasets.SscWscDataModule(**ds_args)),)
@@ -117,21 +140,37 @@ def run_predict():
         else:
             raise AttributeError
 
+        if not isinstance(predictions, dict):
+            predictions = {}
+
         # trainer.test(model, datamodule=tdm, verbose=False)
         if not model.use_ddp or (model.use_ddp and torch.distributed.get_rank() == 0):
             # with open(os.path.join(results_dir, f"{name}_predictions.pkl"), "rb") as pkl:
             #     predictions = pickle.load(pkl)
-            predictions = predictions[0]
+            # predictions = predictions[0]
 
-            with open(os.path.join(results_dir, f"{name.lower()}_predictions.pkl"), "wb") as pkl:
-                pickle.dump(predictions, pkl)
+            # with open(os.path.join(results_dir, f"{name.lower()}_predictions.pkl"), "wb") as pkl:
+            #     pickle.dump(predictions, pkl)
 
-            os.makedirs(os.path.join(results_dir, "predictions", f"{name.lower()}"), exist_ok=True)
-            for record, record_predictions in tqdm(predictions.items()):
-                with open(
-                    os.path.join(results_dir, "predictions", f"{name.lower()}", f"preds_{record.split('.')[0]}.pkl"), "wb",
-                ) as pkl:
-                    pickle.dump(record_predictions, pkl)
+            # os.makedirs(os.path.join(results_dir, "predictions", f"{name.lower()}"), exist_ok=True)
+            # for record, record_predictions in tqdm(predictions.items()):
+            #     with open(
+            #         os.path.join(results_dir, "predictions", f"{name.lower()}", f"preds_{record.split('.')[0]}.pkl"), "wb",
+            #     ) as pkl:
+            #         pickle.dump(record_predictions, pkl)
+
+            for filepath in sorted(os.listdir(os.path.join(results_dir, name))):
+                with open(os.path.join(results_dir, name, filepath), "rb") as pkl:
+                    prediction = pickle.load(pkl)
+                predictions.update(
+                    {
+                        prediction["record"]: {
+                            "predicted": prediction["predicted"],
+                            "true": prediction["true"],
+                            "stable_sleep": prediction["stable_sleep"],
+                        }
+                    }
+                )
 
             df, cm_sub, cm_tot = utils.evaluate_performance(
                 predictions,
