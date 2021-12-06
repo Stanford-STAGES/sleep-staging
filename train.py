@@ -29,7 +29,7 @@ def run_training():
     loggers, callbacks = utils.get_loggers_callbacks(args, model)
 
     # Define trainer object from arguments
-    trainer = Trainer.from_argparse_args(args, deterministic=True, logger=loggers, callbacks=callbacks, weights_summary="full")
+    trainer = Trainer.from_argparse_args(args, deterministic=True, logger=loggers, callbacks=callbacks, weights_summary="top")
     loggers[-1].watch(model)
 
     # ================================================================================================================
