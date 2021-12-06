@@ -26,6 +26,7 @@ except ImportError:
 
 warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
 SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
+DEFAULT_SEQUENCE_LEN = 5
 
 logger = logging.getLogger()
 
@@ -213,10 +214,10 @@ class SscWscPsgDataset(Dataset):
         # self.loaded_record = None
         # self.current_position = None
         # data = load_psg_h5_data(os.path.join(self.data_dir, self.records[0]))
-        self.cache_dir = "data/.cache_large"
+        self.cache_dir = "data/.cache_"
         memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
-        # get_data = memory.cache(initialize_record)
-        get_data = initialize_record
+        get_data = memory.cache(initialize_record)
+        # get_data = initialize_record
 
         # Get information about the data
         print(f"Loading mmap data using {n_jobs} workers:")
@@ -383,18 +384,51 @@ class SscWscPsgDataset(Dataset):
         try:
             current_record = self.index_to_record[idx]["record"]
             # If using balanced sampling, we skip the idx and choose from records directly in the training data
-            if current_record in set(self.train_data.records) and self.balanced_sampling:
+            if self.balanced_sampling and current_record in set(self.train_data.records):
                 current_record = np.random.choice(self.train_data.records)
                 scaler = self.scalers[current_record]
                 while True:
                     class_choice = np.random.choice(list(self.record_class_indices[current_record].keys()))
                     if self.record_class_indices[current_record][class_choice]:
-                        current_sequence = np.random.choice(self.record_class_indices[current_record][class_choice])
+                        current_sequence_idx = np.random.choice(self.record_class_indices[current_record][class_choice])
+                        if self.sequence_length != DEFAULT_SEQUENCE_LEN:
+                            try:
+                                sequence_start = np.random.choice(
+                                    np.arange(
+                                        np.max(
+                                            [
+                                                self.record_indices[current_record][0],
+                                                current_sequence_idx - 2 * self.sequence_length // DEFAULT_SEQUENCE_LEN + 2,
+                                            ]
+                                        ),
+                                        np.min(
+                                            [
+                                                self.record_indices[current_record][-1]
+                                                - 2 * self.sequence_length // DEFAULT_SEQUENCE_LEN
+                                                + 2,
+                                                current_sequence_idx,
+                                            ]
+                                        )
+                                        + 1,
+                                        2,
+                                    )
+                                )
+                            except:
+                                print("")
+                            sequence_stop = sequence_start + 2 * self.sequence_length // DEFAULT_SEQUENCE_LEN
+                            current_sequence = slice(sequence_start, sequence_stop, 2)
+                        else:
+                            current_sequence = current_sequence_idx
                         break
             else:
                 scaler = self.scalers[current_record]
-                current_sequence = self.index_to_record[idx]["idx"]
-            stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze()
+                if not isinstance(self.sequence_length, str) and self.sequence_length != DEFAULT_SEQUENCE_LEN:
+                    sequence_start = self.index_to_record[idx]["idx"]
+                    sequence_stop = self.index_to_record[idx]["idx"] + 2 * self.sequence_length // DEFAULT_SEQUENCE_LEN
+                    current_sequence = slice(sequence_start, sequence_stop, 2)
+                else:
+                    current_sequence = self.index_to_record[idx]["idx"]
+            stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze(-1)
 
             if isinstance(self.sequence_length, str) and self.sequence_length == "full":
                 current_sequence = slice(None)
@@ -402,7 +436,7 @@ class SscWscPsgDataset(Dataset):
             # Grab data
             with File(os.path.join(self.data_dir, current_record), "r") as f:
                 x = f["M"][current_sequence].astype("float32")
-                t = f["L"][current_sequence].astype("uint8").squeeze()
+                t = f["L"][current_sequence].astype("uint8").squeeze(-1)
             # x = self.data[current_record]['data'][current_sequence]
             # t = self.data[current_record]['target'][current_sequence]
 
@@ -412,15 +446,30 @@ class SscWscPsgDataset(Dataset):
         if np.isnan(x).any():
             print("NaNs detected!")
 
-        if isinstance(self.sequence_length, str) and self.sequence_length == "full":
+        if self.sequence_length != DEFAULT_SEQUENCE_LEN:
             N, C, T = x.shape
             x = x.transpose(1, 0, 2).reshape(C, N * T)
+            last_batch = False
+            if not isinstance(self.sequence_length, str) and N * T != self.sequence_length * 128 * 60:
+                last_batch = True
+                x = np.pad(x, [(0, 0), (0, self.sequence_length * 128 * 60 - N * T)])
             N, C, T = t.shape
             t = t.transpose(1, 0, 2).reshape(C, N * T)
+            if last_batch:
+                t = np.pad(t, [(0, 0), (0, self.sequence_length * 60 - N * T)])
+            current_sequence = np.arange(1000)[current_sequence]
+            stable_sleep = stable_sleep.reshape(-1)
+            if last_batch:
+                stable_sleep = np.pad(stable_sleep, [(0, 2 * self.sequence_length - N * 10)])
+
+        if isinstance(self.sequence_length, str) and self.sequence_length == "full":
             current_sequence = self.index_to_record[idx]["idx"]
 
         if scaler:
-            x = scaler.transform(x.T).T  # (n_channels, n_samples)
+            try:
+                x = scaler.transform(x.T).T  # (n_channels, n_samples)
+            except:
+                print("")
 
         ###############################################################################################
         # --------------------------- ADD SYNTHETIC SPINDLES ---------------------------------------- #
@@ -606,7 +655,10 @@ class SscWscDataModule(pl.LightningDataModule):
     def setup(self, stage="fit"):
         if stage == "fit":
             dataset = SscWscPsgDataset(
-                data_dir=self.data["train"], balanced_sampling=self.balanced_sampling, **self.dataset_params
+                data_dir=self.data["train"],
+                balanced_sampling=self.balanced_sampling,
+                overlap=self.balanced_sampling,
+                **self.dataset_params,
             )
             self.train, self.eval = dataset.split_data()
         elif stage == "test":
@@ -616,23 +668,13 @@ class SscWscDataModule(pl.LightningDataModule):
     def train_dataloader(self):
         """Return training dataloader."""
         return torch.utils.data.DataLoader(
-            self.train,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.n_workers,
-            pin_memory=True,
-            # drop_last=True,
+            self.train, batch_size=self.batch_size, shuffle=True, num_workers=self.n_workers, pin_memory=True, drop_last=True,
         )
 
     def val_dataloader(self):
         """Return validation dataloader."""
         return torch.utils.data.DataLoader(
-            self.eval,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.n_workers,
-            pin_memory=True,
-            # drop_last=True,
+            self.eval, batch_size=self.batch_size, shuffle=False, num_workers=self.n_workers, pin_memory=True, drop_last=True,
         )
 
     def test_dataloader(self):
@@ -650,6 +692,7 @@ class SscWscDataModule(pl.LightningDataModule):
         dataset_group = parser.add_argument_group("dataset")
         dataset_group.add_argument("--data_dir", default="data/train/raw/individual_encodings", type=str)
         dataset_group.add_argument("--eval_ratio", default=0.1, type=float)
+        dataset_group.add_argument("--n_channels", default=5, type=int)
         dataset_group.add_argument("--n_jobs", default=-1, type=int)
         dataset_group.add_argument("--n_records", default=None, type=int)
         dataset_group.add_argument("--scaling", default=None, type=str)
@@ -683,16 +726,19 @@ if __name__ == "__main__":
     # dataset_params = dict(data_dir="./data/ssc_wsc/raw/5min", n_jobs=1, scaling="robust", n_records=10,)
     # dataset = SscWscPsgDataset(**dataset_params)
     dm_params = dict(
-        batch_size=32,
+        batch_size=64,
         n_workers=0,
-        data_dir="./data/ssc_wsc/raw/5min",
+        data_dir="./data/ssc_wsc/raw",
         eval_ratio=0.1,
-        n_records=None,
+        n_records=10,
         scaling="robust",
-        adjustment=15,
-        cv=-3,
-        cv_idx=0,
-        n_jobs=-1,
+        adjustment=0,
+        cv=None,
+        cv_idx=None,
+        n_jobs=1,
+        sequence_length=20,
+        balanced_sampling=True,
+        n_channels=5,
     )
     dm = SscWscDataModule(**dm_params)
     dm.setup("fit")

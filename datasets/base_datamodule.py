@@ -25,6 +25,7 @@ except ImportError:
     from utils.parallel_bar import ParallelExecutor
 
 warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
+DEFAULT_SEQUENCE_LEN = 5
 
 
 class BaseDataset(Dataset):
@@ -68,7 +69,7 @@ class BaseDataset(Dataset):
         # self.scalers = {r: None for r in self.records}
         # self.stable_sleep = {r: None for r in self.records}
         # self.record_class_indices = {r: None for r in self.records}
-        self.cache_dir = "data/.cache"
+        self.cache_dir = "data/.cache_"
         memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
         # get_data = memory.cache(initialize_record)
         get_data = initialize_record
@@ -203,41 +204,95 @@ class BaseDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        current_record = self.index_to_record[idx]["record"]
-        # If using balanced sampling, we skip the idx and choose from records directly in the training data
-        if self.balanced_sampling and current_record in set(self.train_data.records):
-            current_record = np.random.choice(self.train_data.records)
-            scaler = self.scalers[current_record]
-            while True:
-                class_choice = np.random.choice(list(self.record_class_indices[current_record].keys()))
-                if self.record_class_indices[current_record][class_choice]:
-                    current_sequence = np.random.choice(self.record_class_indices[current_record][class_choice])
-                    break
-        else:
-            scaler = self.scalers[current_record]
-            current_sequence = self.index_to_record[idx]["idx"]
-        stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze()
+        try:
+            current_record = self.index_to_record[idx]["record"]
+            # If using balanced sampling, we skip the idx and choose from records directly in the training data
+            if self.balanced_sampling and current_record in set(self.train_data.records):
+                current_record = np.random.choice(self.train_data.records)
+                scaler = self.scalers[current_record]
+                while True:
+                    class_choice = np.random.choice(list(self.record_class_indices[current_record].keys()))
+                    if self.record_class_indices[current_record][class_choice]:
+                        current_sequence_idx = np.random.choice(self.record_class_indices[current_record][class_choice])
+                        if self.sequence_length != DEFAULT_SEQUENCE_LEN:
+                            try:
+                                sequence_start = np.random.choice(
+                                    np.arange(
+                                        np.max(
+                                            [
+                                                self.record_indices[current_record][0],
+                                                current_sequence_idx - 2 * self.sequence_length // DEFAULT_SEQUENCE_LEN + 2,
+                                            ]
+                                        ),
+                                        np.min(
+                                            [
+                                                self.record_indices[current_record][-1]
+                                                - 2 * self.sequence_length // DEFAULT_SEQUENCE_LEN
+                                                + 2,
+                                                current_sequence_idx,
+                                            ]
+                                        )
+                                        + 1,
+                                        2,
+                                    )
+                                )
+                            except:
+                                print("")
+                            sequence_stop = sequence_start + 2 * self.sequence_length // DEFAULT_SEQUENCE_LEN
+                            current_sequence = slice(sequence_start, sequence_stop, 2)
+                        else:
+                            current_sequence = current_sequence_idx
+                        break
+            else:
+                scaler = self.scalers[current_record]
+                if not isinstance(self.sequence_length, str) and self.sequence_length != DEFAULT_SEQUENCE_LEN:
+                    sequence_start = self.index_to_record[idx]["idx"]
+                    sequence_stop = self.index_to_record[idx]["idx"] + 2 * self.sequence_length // DEFAULT_SEQUENCE_LEN
+                    current_sequence = slice(sequence_start, sequence_stop, 2)
+                else:
+                    current_sequence = self.index_to_record[idx]["idx"]
+            stable_sleep = np.array(self.stable_sleep[current_record][current_sequence]).squeeze(-1)
 
-        if isinstance(self.sequence_length, str) and self.sequence_length == "full":
-            current_sequence = slice(None)
+            if isinstance(self.sequence_length, str) and self.sequence_length == "full":
+                current_sequence = slice(None)
 
-        # Grab data
-        with File(os.path.join(self.data_dir, current_record), "r") as f:
-            x = f["M"][current_sequence].astype("float32")
-            t = f["L"][current_sequence].astype("uint8").squeeze()
+            # Grab data
+            with File(os.path.join(self.data_dir, current_record), "r") as f:
+                x = f["M"][current_sequence].astype("float32")
+                t = f["L"][current_sequence].astype("uint8").squeeze(-1)
+            # x = self.data[current_record]['data'][current_sequence]
+            # t = self.data[current_record]['target'][current_sequence]
+
+        except IndexError:
+            print("Bug")
 
         if np.isnan(x).any():
             print("NaNs detected!")
 
-        if isinstance(self.sequence_length, str) and self.sequence_length == "full":
+        if self.sequence_length != DEFAULT_SEQUENCE_LEN:
             N, C, T = x.shape
             x = x.transpose(1, 0, 2).reshape(C, N * T)
+            last_batch = False
+            if not isinstance(self.sequence_length, str) and N * T != self.sequence_length * 128 * 60:
+                last_batch = True
+                x = np.pad(x, [(0, 0), (0, self.sequence_length * 128 * 60 - N * T)])
             N, C, T = t.shape
             t = t.transpose(1, 0, 2).reshape(C, N * T)
+            if last_batch:
+                t = np.pad(t, [(0, 0), (0, self.sequence_length * 60 - N * T)])
+            current_sequence = np.arange(1000)[current_sequence]
+            stable_sleep = stable_sleep.reshape(-1)
+            if last_batch:
+                stable_sleep = np.pad(stable_sleep, [(0, 2 * self.sequence_length - N * 10)])
+
+        if isinstance(self.sequence_length, str) and self.sequence_length == "full":
             current_sequence = self.index_to_record[idx]["idx"]
 
         if scaler:
-            x = scaler.transform(x.T).T  # (n_channels, n_samples)
+            try:
+                x = scaler.transform(x.T).T  # (n_channels, n_samples)
+            except:
+                print("")
 
         ###############################################################################################
         # --------------------------- ADD SYNTHETIC SPINDLES ---------------------------------------- #
