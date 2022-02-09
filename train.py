@@ -21,6 +21,8 @@ def run_training():
 
     # Setup data module for training
     dm, args = utils.get_data(args)
+    np.savetxt(os.path.join(args.save_dir, "train_records.txt"), dm.train.records, delimiter="\n", fmt="%s")
+    np.savetxt(os.path.join(args.save_dir, "eval_records.txt"), dm.eval.records, delimiter="\n", fmt="%s")
 
     # Setup model
     model = utils.get_model(args)
