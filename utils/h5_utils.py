@@ -304,4 +304,7 @@ def get_stable_stage(hypnogram, stage, adjustment=30):
 
 
 def get_unknown_stage(onehot_hypnogram):
-    return onehot_hypnogram.sum(axis=1) == 0
+    unknowns = onehot_hypnogram.sum(axis=1) == 0
+    if unknowns.all():
+        unknowns = ~unknowns
+    return unknowns
