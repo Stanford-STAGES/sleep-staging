@@ -110,10 +110,15 @@ def run_predict():
         test_dm.append(("test", datasets.SscWscDataModule(**ds_args)),)
         test_dm[-1][1].setup("test")
 
-        # test_args = ds_args.copy()
-        # test_args.pop("data_dir")
-        # # test_dm.append(("ahc", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ahc/raw"}, **test_args)),)
-        # # test_dm[-1][1].setup("test")
+        test_args = ds_args.copy()
+        test_args.pop("data_dir")
+        for cohort_name in ["ahc", "dhc", "ihc", "jcts", "khc"]:
+            test_dm.append(
+                (cohort_name, datasets.BaseDataModule(data_dir={"train": None, "test": f"data/{cohort_name}/raw"}, **test_args)),
+            )
+            test_dm[-1][1].setup("test")
+        # test_dm.append(("ahc", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ahc/raw"}, **test_args)),)
+        # test_dm[-1][1].setup("test")
         # test_dm.append(("dhc", datasets.BaseDataModule(data_dir={"train": None, "test": "data/dhc/raw"}, **test_args)),)
         # test_dm[-1][1].setup("test")
         # test_dm.append(("ihc", datasets.BaseDataModule(data_dir={"train": None, "test": "data/ihc/raw"}, **test_args)),)
