@@ -7,9 +7,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from pytorch_lightning import LightningModule
-from scipy.special import softmax
 from sklearn import metrics
-from tqdm import tqdm
 
 
 activation_fns = {
@@ -96,7 +94,6 @@ class Encoder(nn.Module):
                 z = self.zeropad(z)
             shortcuts.append(z)
             x = self.maxpool(z)
-            # print('x.shape:', x.shape)
 
         # Bottom part
         encoded = self.bottom(x)
@@ -151,8 +148,6 @@ class Decoder(nn.Module):
 
         for upsample_block, conv_block, shortcut in zip(self.upsample_blocks, self.conv_blocks, shortcuts):
             z = upsample_block(z)
-            # print(z.shape)
-            # print(shortcut.shape)
             z = self._maybe_crop(z, shortcut)
             z = torch.cat([shortcut, z], dim=1)
             z = conv_block(z)
@@ -327,7 +322,6 @@ class USleepModel(LightningModule):
             dist.all_gather(out_predicted, predicted)
             dist.all_gather(out_stable_sleep, stable_sleep)
             dist.all_gather(out_seq_nrs, sequence_nrs)
-            # if dist.get_rank() == 0:
             t = (
                 torch.stack(out_true)
                 .transpose(0, 1)
@@ -405,9 +399,6 @@ class USleepModel(LightningModule):
         x, t, r, seqs, stable_sleep = batch
         t = t[:, :, ::30]
 
-        # Classify segments
-        # yhat_30s, yhat_1s = self.classify_segments(x)
-
         # Return predictions at other resolutions
         resolutions = [1/128, 32/128, 64/128, 96/128, 1, 3, 5, 10, 15, 30, 60, 150, 300, 600, 900, 1800, 2700, 3600, 5400, 7200]
         outputs = {
@@ -431,129 +422,6 @@ class USleepModel(LightningModule):
 
         with open(os.path.join(results_dir, f"preds_{outputs['record'].split('.')[0]}.pkl"), "wb") as pkl:
             pickle.dump(outputs, pkl)
-        # yhat_3s, _ = self.classify_segments(x, resolution=3)
-
-        # return {
-        #     # "predicted": yhat_30s.softmax(dim=1),
-        #     "predicted": outputs['yhat_30s'].softmax(dim=1),
-        #     "true": t,
-        #     "record": r,
-        #     "sequence_nr": seqs,
-        #     "stable_sleep": stable_sleep,
-        #     "logits": outputs['yhat_1s'].softmax(dim=1),
-        #     **outputs
-        # }
-            # "y_hat_3s": outputs['yhat_3s'].softmax(dim=1),
-        # }.update(outputs)
-
-    # def test_epoch_end(self, output_results):
-    #     """This method collects the results and sorts the predictions according to record and sequence nr."""
-    #     try:
-    #         all_records = sorted(self.trainer.datamodule.test.records)
-    #     except AttributeError: # Catch exception if we've supplied dataloaders instead of DataModule
-    #         all_records = sorted(self.trainer.test_dataloaders[0].dataset.records)
-
-    #     # true = torch.cat([out['true'] for out in output_results], dim=0).transpose(2, 1)
-    #     # predicted = torch.cat([out['predicted'] for out in output_results], dim=0).permute([0, 2, 1])
-    #     # stable_sleep = torch.cat([out['stable_sleep'].to(torch.int64) for out in output_results], dim=0)
-    #     # sequence_nrs = torch.cat([out['sequence_nr'] for out in output_results], dim=0)
-    #     # logits = torch.cat([out['logits'] for out in output_results], dim=0).permute([0, 2, 1])
-    #     # y_hat_3s = torch.cat([out['y_hat_3s'] for out in output_results], dim=0).permute([0, 2, 1])
-
-    #     if self.use_ddp:
-    #         raise NotImplementedError
-    #         # record2int = {r: idx for idx, r in enumerate(all_records)}
-    #         # int2record = {idx: r for idx, r in enumerate(all_records)}
-    #         # records = torch.cat([torch.Tensor([record2int[r]]).type_as(stable_sleep) for out in output_results for r in out['record']], dim=0)
-    #         # out_true = [torch.zeros_like(true) for _ in range(dist.get_world_size())]
-    #         # out_predicted = [torch.zeros_like(predicted) for _ in range(dist.get_world_size())]
-    #         # out_stable_sleep = [torch.zeros_like(stable_sleep) for _ in range(dist.get_world_size())]
-    #         # out_seq_nrs = [torch.zeros_like(sequence_nrs) for _ in range(dist.get_world_size())]
-    #         # out_records = [torch.zeros_like(records) for _ in range(dist.get_world_size())]
-    #         # out_logits = [torch.zeros_like(logits) for _ in range(dist.get_world_size())]
-    #         # out_y_hat_3s = [torch.zeros_like(y_hat_3s) for _ in range(dist.get_world_size())]
-
-    #         # dist.barrier()
-    #         # dist.all_gather(out_true, true)
-    #         # dist.all_gather(out_predicted, predicted)
-    #         # dist.all_gather(out_stable_sleep, stable_sleep)
-    #         # dist.all_gather(out_seq_nrs, sequence_nrs)
-    #         # dist.all_gather(out_records, records)
-    #         # dist.all_gather(out_logits, logits)
-    #         # dist.all_gather(out_y_hat_3s, y_hat_3s)
-
-    #         # if dist.get_rank() == 0:
-    #         #     true = torch.cat(out_true)
-    #         #     predicted = torch.cat(out_predicted)
-    #         #     stable_sleep = torch.cat(out_stable_sleep)
-    #         #     sequence_nrs = torch.cat(out_seq_nrs)
-    #         #     records = [int2record[r.item()] for r in torch.cat(out_records)]
-    #         #     logits = torch.cat(out_logits)
-    #         #     y_hat_3s = torch.cat(out_y_hat_3s)
-
-    #         # else:
-    #         #     return None
-    #     else:
-    #         records = [r for out in output_results for r in out['record']]
-
-    #     results = {
-    #         r: {
-    #             "true": [],
-    #             "true_label": [],
-    #             "predicted": [],
-    #             "predicted_label": [],
-    #             "stable_sleep": [],
-    #             "logits": [],
-    #             "seq_nr": [],
-    #             **{k: [] for k in output_results[0].keys() if 'yhat' in k}
-    #             # "yhat_3s": [],
-
-    #         } for r in all_records
-    #     }
-
-    #     for o in tqdm(output_results, desc="Sorting predictions"):
-    #         r = o["record"][0]
-
-    #         results[r]["true"] = o["true"].squeeze(0).T.cpu().numpy()
-    #         results[r]["predicted"] = o["predicted"].squeeze(0).T.cpu().numpy()
-    #         results[r]["stable_sleep"] = o["stable_sleep"].squeeze(0).cpu().numpy()
-    #         results[r]["logits"] = o["logits"].squeeze(0).T.cpu().numpy()
-    #         results[r]["seq_nr"] = o["sequence_nr"].squeeze(0).cpu().numpy()
-    #         for resolution_key in [res for res in o.keys() if 'yhat' in res]:
-    #             results[r][resolution_key] = o[resolution_key].squeeze(0).T.cpu().numpy()
-
-    #     # for r in tqdm(all_records, desc='Sorting predictions...'):
-    #     #     record_idx = [idx for idx, rec in enumerate(records) if r == rec]
-    #     #     current_t = true[record_idx].reshape(-1, *true.shape[2:])
-    #     #     current_p = predicted[record_idx].reshape(-1, predicted.shape[-1])
-    #     #     current_ss = stable_sleep[record_idx].reshape(-1).to(torch.bool)
-    #     #     current_l = logits[record_idx].reshape(-1, logits.shape[-1])
-    #     #     current_seq = sequence_nrs[record_idx]
-    #     #     current_3s = y_hat_3s[record_idx].reshape(-1, y_hat_3s.shape[-1])
-
-    #     #     results[r]['true'] = current_t.cpu().numpy()
-    #     #     results[r]['predicted'] = current_p.cpu().numpy()
-    #     #     results[r]['stable_sleep'] = current_ss.cpu().numpy()
-    #     #     results[r]['logits'] = current_l.cpu().numpy()
-    #     #     results[r]['seq_nr'] = current_seq.cpu().numpy()
-    #     #     results[r]['yhat_3s'] = current_3s.cpu().numpy()
-
-        # return results
-
-    # def compute_loss(self, y_pred, y_true, stable_sleep):
-    #     stable_sleep = stable_sleep[:, ::self.hparams.epoch_length].squeeze()
-    #     y_true = y_true[:, :, ::self.hparams.epoch_length]
-
-    #     # if y_pred.shape[-1] != self.hparams.num_classes:
-    #     #     y_pred = y_pred.permute(dims=[0, 2, 1])
-    #     # if y_true.shape[-1] != self.hparams.num_classes:
-    #     #     y_true = y_true.permute(dims=[0, 2, 1])
-    #     # return self.loss(y_pred, y_true.argmax(dim=-1))
-
-    #     # return self.loss(y_pred, y_true, stable_sleep)
-    #     loss = self.loss(y_pred[stable_sleep], y_true.argmax(dim=1)[stable_sleep])
-    #     N, L = loss.shape
-    #     return (loss.sum(axis=-1) / L).sum() / N
 
     def configure_optimizers(self):
         return torch.optim.Adam(
@@ -625,7 +493,6 @@ if __name__ == "__main__":
     print("z.shape:", z.shape)
     print("Shortcuts shape:", [shortcut.shape for shortcut in shortcuts])
 
-
     # TEST DECODER
     decoder = Decoder(
         activation='elu',
@@ -634,7 +501,6 @@ if __name__ == "__main__":
         upsample_kernel=args.upsample_kernel,
     )
     x_hat = decoder(z, shortcuts[::-1])
-
 
     # TEST DENSE
     dense = Dense(activation='tanh', in_channels=encoder.filters[0], out_channels=encoder.filters[0])
