@@ -192,8 +192,6 @@ class SegmentClassifier(nn.Module):
             nn.Conv2d(in_channels=self.in_channels, out_channels=self.num_classes, kernel_size=1),
             self.activation(),
             nn.Conv2d(in_channels=self.num_classes, out_channels=self.num_classes, kernel_size=1),
-            nn.Softmax(dim=1)
-            # nn.Softmax(dim=1),
         )
         nn.init.xavier_normal_(self.layers[0].weight)
         nn.init.zeros_(self.layers[0].bias)
@@ -292,7 +290,7 @@ class USleepModel(LightningModule):
             y.transpose(2, 1)[stable_sleep]
         )
 
-        return loss, y_hat, y, stable_sleep
+        return loss, y_hat.softmax(1), y, stable_sleep
 
     def training_step(self, batch, batch_idx):
         X, y, _, _, stable_sleep = batch
@@ -413,7 +411,7 @@ class USleepModel(LightningModule):
         # Return predictions at other resolutions
         resolutions = [1/128, 32/128, 64/128, 96/128, 1, 3, 5, 10, 15, 30, 60, 150, 300, 600, 900, 1800, 2700, 3600, 5400, 7200]
         outputs = {
-            f'yhat_{resolution}s': self.classify_segments(x, resolution)[0].squeeze(0).T.cpu().numpy() for resolution in resolutions
+            f'yhat_{resolution}s': self.classify_segments(x, resolution)[0].softmax(1).squeeze(0).T.cpu().numpy() for resolution in resolutions
         }
         outputs = {
             "predicted": outputs['yhat_30s'],
