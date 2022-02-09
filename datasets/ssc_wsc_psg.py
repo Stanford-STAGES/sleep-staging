@@ -3,7 +3,6 @@ import os
 import random
 import warnings
 from itertools import compress
-from pprint import pprint
 
 import numpy as np
 import torch
@@ -11,17 +10,14 @@ import pytorch_lightning as pl
 from h5py import File
 from joblib import delayed
 from joblib import Memory
-from joblib import Parallel
 from sklearn.preprocessing import RobustScaler, StandardScaler
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from torch.utils.data import Subset
 from tqdm import tqdm
 
 try:
     from utils import ParallelExecutor, load_h5_data, initialize_record
 except ImportError:
-    from utils.h5_utils import initialize_record, load_h5_data
     from utils.parallel_bar import ParallelExecutor
 
 warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
@@ -29,140 +25,6 @@ SCALERS = {"robust": RobustScaler, "standard": StandardScaler}
 DEFAULT_SEQUENCE_LEN = 5
 
 logger = logging.getLogger()
-
-
-def get_class_sequence_idx(hypnogram, selected_sequences):
-    d = {
-        "w": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 0).any() and idx in selected_sequences],
-        "n1": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 1).any() and idx in selected_sequences],
-        "n2": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 2).any() and idx in selected_sequences],
-        "n3": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 3).any() and idx in selected_sequences],
-        "r": [idx for idx, hyp in enumerate(hypnogram) if (hyp == 4).any() and idx in selected_sequences],
-    }
-    return d
-
-
-def get_unknown_stage(onehot_hypnogram):
-    return onehot_hypnogram.sum(axis=1) == 0
-
-
-def get_stable_stage(hypnogram, stage, adjustment=30):
-    """
-    Args:
-        hypnogram (array_like): hypnogram with sleep stage labels
-        stage (int): sleep stage label ({'W': 0, 'N1': 1, 'N2': 2, 'N3': 3, 'R': 4})
-        adjusted (int, optional): Controls the amount of bracketing surrounding a period of stable sleep.
-        E.g. if adjustment=30, each period of stable sleep needs to be bracketed by 30 s.
-    Returns:
-        stable_periods: a list of range objects where each range describes a period of stable sleep stage.
-    """
-    from itertools import groupby
-    from operator import itemgetter
-
-    list_of_periods = []
-    for k, g in groupby(enumerate(np.where(hypnogram == stage)[0]), lambda x: x[0] - x[1]):
-        list_of_periods.append(list(map(itemgetter(1), g)))
-    stable_periods = [range(period[0] + adjustment, period[-1] + 1 - adjustment) for period in list_of_periods]
-    # Some periods are empty and need to be removed
-    stable_periods = list(filter(lambda x: list(x), stable_periods))
-
-    return stable_periods
-
-
-def get_stable_sleep_periods(hypnogram, adjustment=30):
-    """Get periods of stable sleep uninterrupted by transitions
-
-    Args:
-        hypnogram (array-like): hypnogram vector or array with sleep stage labels
-        adjustment (int): parameter controlling the amount of shift when selecting periods of stable sleep. E.g.
-        if adjustment = 30, each period of stable sleep needs to be bracketed by 30 s of the same sleep stage.
-    """
-    hypnogram_shape = hypnogram.shape
-    hypnogram = hypnogram.reshape(np.prod(hypnogram_shape))
-    stable_periods = []
-    stable_periods_bool = np.full(np.prod(hypnogram_shape), False)
-    for stage in [0, 1, 2, 3, 4]:
-        stable_periods.append(get_stable_stage(hypnogram, stage, adjustment))
-        for period in stable_periods[-1]:
-            stable_periods_bool[period] = True
-    stable_periods_bool = stable_periods_bool.reshape(hypnogram_shape)
-
-    return stable_periods_bool, stable_periods
-
-
-# def initialize_record(filename, scaling=None, overlap=True, adjustment=30):
-
-#     if scaling in SCALERS.keys():
-#         scaler = SCALERS[scaling]()
-#     else:
-#         scaler = None
-
-#     with File(filename, "r") as h5:
-#         # if "A2081_5 194244.h5" in filename:
-#         #     print("Hej")
-#         N, C, T = h5["M"].shape
-#         hyp_shape = h5["L"].shape
-#         sequences_in_file = N
-
-#         if scaler:
-#             scaler.fit(h5["M"][:].transpose(1, 0, 2).reshape((C, N * T)).T)
-
-#         # Remember that the output array from the H5 has 50 % overlap between segments.
-#         # Use the following to split into even and odd
-#         if overlap:
-#             hyp_even = h5["L"][0::2]
-#             hyp_odd = h5["L"][1::2]
-#             if adjustment > 0:
-#                 stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], False)
-#                 stable_sleep[0::2] = get_stable_sleep_periods(hyp_even.argmax(axis=1), adjustment)[0]
-#                 stable_sleep[1::2] = get_stable_sleep_periods(hyp_odd.argmax(axis=1), adjustment)[0]
-#             else:
-#                 stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], True)
-#         else:
-#             if adjustment > 0:
-#                 stable_sleep = get_stable_sleep_periods(h5["L"][:].argmax(axis=1), adjustment)[0]
-#             else:
-#                 stable_sleep = np.full([v for idx, v in enumerate(hyp_shape) if idx != 1], True)
-
-#         # Remove unknown stage
-#         unknown_stage = get_unknown_stage(h5["L"][:])
-#         stable_sleep[unknown_stage] = False
-
-#         # Get bin counts
-#         # if "train" in filename:
-#         if overlap:
-#             # hyp = h5["L"][::2].argmax(axis=1)[~get_unknown_stage(h5["L"][::2])][::30]
-#             hyp = h5["L"][::2].argmax(axis=1)[~unknown_stage[::2] & stable_sleep[::2]][::30]
-#         else:
-#             # hyp = h5["L"][:].argmax(axis=1)[~get_unknown_stage(h5["L"][:])][::30]
-#             hyp = h5["L"][:].argmax(axis=1)[~unknown_stage & stable_sleep][::30]
-#         bin_counts = np.bincount(hyp, minlength=C)
-#         # else:
-#         #     bin_counts =
-
-#     return sequences_in_file, scaler, stable_sleep, bin_counts
-
-
-def load_psg_h5_data(filename, scaling=None):
-    scaler = None
-
-    if scaling:
-        scaler = SCALERS[scaling]()
-
-    with File(filename, "r") as h5:
-        N, C, T = h5["M"].shape
-        sequences_in_file = N
-
-        if scaling:
-            scaler.fit(h5["M"][:].transpose(1, 0, 2).reshape((C, N * T)).T)
-
-    return sequences_in_file, scaler
-    # X = h5['M'][:].astype('float32')
-    # y = h5['L'][:].astype('float32')
-
-    # sequences_in_file = X.shape[0]
-
-    # return X, y, sequences_in_file
 
 
 class SscWscPsgDataset(Dataset):
@@ -200,20 +62,6 @@ class SscWscPsgDataset(Dataset):
         self.n_channels = n_channels
         self.n_classes = 5
         self.records = sorted(os.listdir(self.data_dir))[: self.n_records]
-        # self.data = {r: [] for r in self.records}
-        # self.index_to_record = []
-        # self.index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
-        # self.record_to_index = []
-        # self.record_indices = {r: None for r in self.records}
-        # self.scalers = {r: None for r in self.records}
-        # self.stable_sleep = {r: None for r in self.records}
-        # self.record_class_indices = {r: None for r in self.records}
-        # self.batch_indices = []
-        # self.current_record_idx = -1
-        # self.current_record = None
-        # self.loaded_record = None
-        # self.current_position = None
-        # data = load_psg_h5_data(os.path.join(self.data_dir, self.records[0]))
         self.cache_dir = "data/.cache_"
         memory = Memory(self.cache_dir, mmap_mode="r", verbose=0)
         get_data = memory.cache(initialize_record)
@@ -231,46 +79,8 @@ class SscWscPsgDataset(Dataset):
             )
             for record in self.records
         )
-        # for record, d in zip(tqdm(self.records, desc='Processing'), data):
-        #     seqs_in_file = d[2]
-        #     self.data[record] = {'data': d[0], 'target': d[1]}
         cum_class_counts = np.zeros(self.n_classes, dtype=np.int64)
 
-        # # TODO: merge this function into the get_data function
-        # def sort_record_data(record, data):
-        #     index_to_record_class = {"w": [], "n1": [], "n2": [], "n3": [], "r": []}
-        #     hypnogram, _, scaler, stable_sleep, class_counts = data
-        #     select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
-        #     record_class_indices = get_class_sequence_idx(hypnogram, select_sequences)
-        #     index_to_record = [{"record": record, "idx": x} for x in select_sequences]
-        #     for c in index_to_record_class.keys():
-        #         index_to_record_class[c] = [
-        #             {
-        #                 "idx": [idx for idx, i2r in enumerate(index_to_record) if i2r["idx"] == x and record == i2r["record"]][
-        #                     0
-        #                 ],
-        #                 "record": record,
-        #                 "record_idx": x,
-        #             }
-        #             for x in record_class_indices[c]
-        #         ]
-        #     # if len(class_counts) < 5:
-        #     #     print(
-        #     #         f"Hypnogram count error | Record: {record} | Hypnogram shape: {hypnogram.shape} | Unique classes: {np.unique(hypnogram)} | Class counts: {class_counts}"
-        #     #     )
-        #     return dict(
-        #         record_indices=(record, select_sequences),
-        #         record_class_indices=(record, record_class_indices),
-        #         index_to_record=index_to_record,
-        #         index_to_record_class=index_to_record_class,
-        #         scalers=(record, scaler),
-        #         stable_sleep=(record, stable_sleep),
-        #         cum_class_counts=(record, class_counts),
-        #     )
-
-        # sorted_data = ParallelExecutor(n_jobs=-1, prefer="threads")(total=len(self.records), desc="Processing")(
-        #     delayed(sort_record_data)(record, d) for record, d in zip(self.records, data)
-        # )
         # This contains the indices for each record (i.e. index 0 maps to first sequence of recording 1 etc.)
         self.record_indices = dict([s["record_indices"] for s in sorted_data])
         # This holds the sequence indices containing each stage in reach record
@@ -278,44 +88,7 @@ class SscWscPsgDataset(Dataset):
         self.scalers = dict([s["scalers"] for s in sorted_data])
         self.stable_sleep = dict([s["stable_sleep"] for s in sorted_data])
         self.index_to_record = [sub for s in sorted_data for sub in s["index_to_record"]]
-        # self.index_to_record_class = [sub for s in sorted_data for sub in s["index_to_record_class"]]
         cum_class_counts = sum([s["cum_class_counts"][1] for s in sorted_data if len(s["cum_class_counts"][1]) == 5])
-        # for record, (hypnogram, sequences_in_file, scaler, stable_sleep, class_counts) in zip(
-        #     tqdm(self.records, desc="Processing"), data
-        # ):
-        #     # Some sequences are all unstable sleep, which interferes with the loss calculations.
-        #     # This selects sequences where at least one epoch is sleep.
-        #     select_sequences = np.where(stable_sleep.squeeze(-1).any(axis=1))[0]
-        #     self.record_indices[record] = select_sequences  # np.arange(sequences_in_file)
-        #     self.record_class_indices[record] = get_class_sequence_idx(hypnogram, select_sequences)
-        #     self.index_to_record.extend(
-        #         [{"record": record, "idx": x} for x in select_sequences]
-        #     )  # range(sequences_in_file)])
-        # if self.balanced_sampling:
-        #     for record in self.records:
-        #         for c in self.index_to_record_class.keys():
-        #             self.index_to_record_class[c].extend(
-        #                 [
-        #                     {
-        #                         "idx": [
-        #                             idx
-        #                             for idx, i2r in enumerate(self.index_to_record)
-        #                             if i2r["idx"] == x and record == i2r["record"]
-        #                         ][0],
-        #                         "record": record,
-        #                         "record_idx": x,
-        #                     }
-        #                     for x in self.record_class_indices[record][c]
-        #                 ]
-        #             )
-        #     self.scalers[record] = scaler
-        #     self.stable_sleep[record] = stable_sleep
-        #     try:
-        #         cum_class_counts += class_counts
-        #     except:
-        #         print(
-        #             f"Record {record} has hypnogram of shape: {hypnogram.shape} with the following unique values: {np.unique(hypnogram)}"
-        #         )
 
         # Define the class-balanced weights. We normalize the class counts to the lowest value as the numerator
         # otherwise will dominate the expression
@@ -339,22 +112,13 @@ class SscWscPsgDataset(Dataset):
     def split_data(self):
         n_records = len(self.records)
         self.shuffle_records()
-        # if self.cv is None:
-        # train_data = SscWscPsgSubset(self, np.arange(n_eval, n_records), name="Train")
-        # eval_data = SscWscPsgSubset(self, np.arange(0, n_eval), name="Validation")
-        # else:
+
         if self.cv:
             from sklearn.model_selection import KFold, StratifiedKFold
 
             kf = KFold(n_splits=np.abs(self.cv))
-            # ssc_idx = ["SSC" in s for s in np.array(self.records)[train_idx]]
-            # kf = StratifiedKFold(n_splits=np.abs(self.cv))
+
             if self.cv > 0:
-                # train_idx, eval_idx = list(kf.split(np.arange(n_records)))[self.cv_idx]
-                # _, train_idx = list(kf.split(train_idx, ssc_idx))[self.cv_idx]
-                # else:
-                # eval_idx, train_idx = list(kf.split(np.arange(n_records)))[self.cv_idx]
-                # train_idx, _ = list(kf.split(np.arange(n_records)))[self.cv_idx]
                 train_idx, eval_idx = list(kf.split(range(n_records)))[self.cv_idx]
             print("\n")
             print(f"Running {np.abs(self.cv)}-fold cross-validation procedure.")
@@ -437,8 +201,6 @@ class SscWscPsgDataset(Dataset):
             with File(os.path.join(self.data_dir, current_record), "r") as f:
                 x = f["M"][current_sequence].astype("float32")
                 t = f["L"][current_sequence].astype("uint8").squeeze(-1)
-            # x = self.data[current_record]['data'][current_sequence]
-            # t = self.data[current_record]['target'][current_sequence]
 
         except IndexError:
             print("Bug")
@@ -551,13 +313,7 @@ class SscWscPsgSubset(Dataset):
         self.name = name
         self.balanced_sampling = balanced_sampling
         self.records = [self.dataset.records[idx] for idx in self.record_indices]
-        # if self.balanced_sampling:
-        #     print("Using balanced sampling scheme")
-        #     self.sequence_indices = self._get_subset_class_indices()
-        # else:
-        self.sequence_indices = (
-            self.__get_subset_indices()
-        )  # [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]# [idx for idx, v in enumerate(self.dataset.index_to_record) for r in self.records if v['record'] == r]
+        self.sequence_indices = self.__get_subset_indices()
 
     def _get_subset_class_indices(self):
         records = set(self.records)
@@ -580,15 +336,11 @@ class SscWscPsgSubset(Dataset):
         else:
             return self.dataset[self.sequence_indices[idx]]
 
-    # def __getitem__(self, idx):
-    #     return self.dataset[self.sequence_indices[idx]]
-
     def __len__(self):
         if isinstance(self.sequence_indices, dict):
             return sum([len(v) for v in self.sequence_indices.values()])
         else:
             return len(self.sequence_indices)
-        # return len(self.sequence_indices)
 
     def __str__(self):
         s = f"""
@@ -662,7 +414,6 @@ class SscWscDataModule(pl.LightningDataModule):
             )
             self.train, self.eval = dataset.split_data()
         elif stage == "test":
-            # self.dataset_params["overlap"] = 0
             self.test = SscWscPsgDataset(data_dir=self.data["test"], overlap=False, **self.dataset_params)
 
     def train_dataloader(self):
@@ -713,44 +464,3 @@ class SscWscDataModule(pl.LightningDataModule):
         dataloader_group.add_argument("--n_workers", default=0, type=int)
 
         return parser
-
-
-if __name__ == "__main__":
-
-    from tqdm import tqdm
-
-    np.random.seed(42)
-    random.seed(42)
-
-    # dataset_params = dict(data_dir="./data/raw/individual_encodings", n_jobs=1, scaling="robust", n_records=10)
-    # dataset_params = dict(data_dir="./data/ssc_wsc/raw/5min", n_jobs=1, scaling="robust", n_records=10,)
-    # dataset = SscWscPsgDataset(**dataset_params)
-    dm_params = dict(
-        batch_size=64,
-        n_workers=0,
-        data_dir="./data/ssc_wsc/raw",
-        eval_ratio=0.1,
-        n_records=10,
-        scaling="robust",
-        adjustment=0,
-        cv=None,
-        cv_idx=None,
-        n_jobs=1,
-        sequence_length=20,
-        balanced_sampling=True,
-        n_channels=5,
-    )
-    dm = SscWscDataModule(**dm_params)
-    dm.setup("fit")
-    # print(dataset)
-    print(dm)
-    # train_data, eval_data = dataset.split_data(0.1)
-    print(train_data)
-    pbar = tqdm(DataLoader(train_data, batch_size=32, shuffle=True, num_workers=0, pin_memory=True))
-    for idx, (x, t) in enumerate(pbar):
-        if idx == 0:
-            print(x.shape)
-    print(eval_data)
-    pbar = tqdm(DataLoader(eval_data, batch_size=32, shuffle=True, num_workers=20, pin_memory=True))
-    for x, t in pbar:
-        pass
