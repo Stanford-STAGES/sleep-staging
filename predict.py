@@ -190,7 +190,8 @@ def run_predict():
                 for eval_window in cm_tot.keys():
                     # print()
                     s += "\n"
-                    s += f"Evaluation window - {eval_window} s\n"
+                    # s += f"Evaluation window - {eval_window} s\n"
+                    s += f"{name.upper()}\n"
                     s += "---------------------------------\n"
                     for case in cm_tot[eval_window].keys():
                         df_ = df.query(f'Window == "{eval_window} s" and Case == "{case}"')
