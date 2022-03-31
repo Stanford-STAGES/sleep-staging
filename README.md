@@ -12,7 +12,7 @@ This is a work in progress, and will be updated regularly.
 ## Requirements
 The necessary packages can be installed in a `conda` environment by running the following command from the root directory.
 ```
-conda env create -f environment.yaml
+conda env create -f environment.yml
 ```
 *Note: the installation process may take a couple of minutes*
 
