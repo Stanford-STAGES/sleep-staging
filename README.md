@@ -5,9 +5,12 @@ This repository contains source code used for training sleep stage detection mod
 This is a work in progress, and will be updated regularly.
 
 ## Table of contents
-1. [Requirements](#requirements)
-2. [How to run](#how-to-run)
-3. [Example run](#detailed-example)
+* [Requirements](#requirements)
+* [Using pre-trained models for inference](#using-pre-trained-models-for-inference)
+    * [U-Sleep](#u-sleep)
+    <!-- * [CNN model](#cnn-model) -->
+* [How to run](#how-to-run)
+* [Example run](#detailed-example)
 
 ## Requirements
 The necessary packages can be installed in a `conda` environment by running the following command from the root directory.
@@ -15,6 +18,22 @@ The necessary packages can be installed in a `conda` environment by running the 
 conda env create -f environment.yaml
 ```
 *Note: the installation process may take a couple of minutes*
+
+## Using pre-trained models for inference
+### U-Sleep
+The following command will use a U-Sleep model pretrained on ~19400 subject recordings.
+```
+python predict.py --resume_from_checkpoint trained_models/usleep-large/best_model.ckpt \
+                  --predict_on '{"<cohort_name>": "<path_to_cohort>", "<another_cohort_name>": "<path_to_another_cohort>"}'
+```
+The following will use a U-Sleep model pretrained on ~2600 subject recordings.
+```
+python predict.py --resume_from_checkpoint trained_models/usleep-small/best_model.ckpt \
+                  --predict_on '{"<cohort_name>": "<path_to_cohort>", "<another_cohort_name>": "<path_to_another_cohort>"}'
+```
+The `<cohort_name>` and `<path_to_cohort>` variables should be a cohort ID string and path to cohort data, respectively, after running the data processing pipelines described below.
+<!-- ### CNN model -->
+
 
 ## How to run
 
@@ -207,31 +226,5 @@ python predict.py --resume_from_checkpoint experiments/dcsm \
 
 Similarly to above, prediction speed is affected by adding a GPU and adding more workers by using the `--gpus` and `--n_workers` flags, respectively.
 
+
 [usleep]: https://doi.org/10.1038/s41746-021-00440-5
-
-<!-- #### Example training run -->
-<!--
-### Testing
-
-## Citation
-
-## Contributing
-
-## License -->
-
-<!-- # Description
-
-This repository represents the sleep staging classification work down using neural networks at Stanford University, and is intended primarily for research and historical reference.
-
-Those interested in using the sleep staging classification methods that were developed from this should use the primary, [Stanford-STAGES](https://www.github.com/stanford-stages/stanford-stages) repository.
-
-# sleep-staging
-
-
-# sc_train.py is run by adding an option with the following format:
-Example:
-python sc_train.py --model ac_lh_ls_lstm
-
-The ac specifies the CC model configuration, the lh specifies the complexity - high in this case, the ls specifies the window length - 15 seconds in this case, and lstm specifies that the model has memory.
-
-To train a model, the sc_config.py should be changed to match the destination for training files, and similarly, to test a model (which has the same option as training) the destination for testing files should be changed. -->
