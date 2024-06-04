@@ -249,6 +249,7 @@ dmypy.json
 .pytype/
 
 ### VisualStudioCode ###
+.vscode/
 .vscode/*
 #!.vscode/settings.json
 #!.vscode/tasks.json
@@ -276,3 +277,4 @@ results
 ._.DS_Store
 overview_file_cohortsEM-ling1.csv
 data_master.csv
+tmp*
