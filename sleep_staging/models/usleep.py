@@ -187,7 +187,6 @@ class SegmentClassifier(nn.Module):
             nn.Conv2d(in_channels=self.in_channels, out_channels=self.num_classes, kernel_size=1),
             self.activation(),
             nn.Conv2d(in_channels=self.num_classes, out_channels=self.num_classes, kernel_size=1),
-            nn.Softmax()
         )
         nn.init.xavier_normal_(self.layers[0].weight)
         nn.init.zeros_(self.layers[0].bias)
@@ -227,13 +226,9 @@ class USleepModel(LightningModule):
             in_channels=self.encoder.filters[0],
             num_classes=hp.n_classes
         )
-
-        # if hasattr(hp, 'cb_weights'):
-        #     self.loss = nn.CrossEntropyLoss(weight=torch.Tensor(hp.cb_weights), reduction='none')
-        # else:
         self.loss = nn.CrossEntropyLoss()
 
-        # Create Optimizer params
+        # Create optimizer params
         self.optimizer_params = dict(lr=hp.lr)
 
     def forward(self, x):
@@ -426,6 +421,23 @@ class USleepModel(LightningModule):
 
         with open(os.path.join(results_dir, f"preds_{outputs['record'].split('.')[0]}.pkl"), "wb") as pkl:
             pickle.dump(outputs, pkl)
+
+    def predict_step(self, x, resolutions=None):
+        if resolutions is None:
+            # Return predictions at other resolutions
+            # resolutions = [1/128, 32/128, 64/128, 96/128, 1, 3, 5, 10, 15, 30, 60, 150, 300, 600, 900, 1800, 2700, 3600, 5400, 7200]
+            resolutions = [32/128, 64/128, 96/128, 1, 3, 5, 10, 15, 30, 60, 150, 300, 600, 900, 1800, 2700, 3600, 5400, 7200]
+        outputs = {
+            f'yhat_{resolution}s': (self.classify_segments(x, resolution)[0]
+                                        .softmax(1)
+                                        .squeeze(0)
+                                        .T
+                                        .detach()
+                                        .cpu()
+                                        .numpy())
+            for resolution in resolutions
+        }
+        return outputs
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), **self.optimizer_params)
