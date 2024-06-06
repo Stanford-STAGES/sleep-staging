@@ -15,10 +15,20 @@ This is a work in progress, and will be updated regularly.
 ## Requirements
 The necessary packages can be installed in a `conda` environment by running the following command from the root directory.
 ```
-conda env create -f environment.yml
+make requirements
 ```
 *Note: the installation process may take a couple of minutes*
 
+## Running inference on unseen data
+After installing the environment as stated above, new data can be run using the `ss-inference` command:
+```
+ss-inference --data-path <directory containing EDF files> \
+             --match-pattern <optional, specificy a file pattern> \
+             --target <output directory> \
+             --fs <output sampling frequency> \
+             --cohort <name of the EDF collection, will be used to define output directories>
+```
+<!--
 ## Using pre-trained models for inference
 ### U-Sleep
 The following command will use a U-Sleep model pretrained on ~19400 subject recordings.
@@ -32,7 +42,6 @@ python predict.py --resume_from_checkpoint trained_models/usleep-small/best_mode
                   --predict_on '{"<cohort_name>": "<path_to_cohort>", "<another_cohort_name>": "<path_to_another_cohort>"}'
 ```
 The `<cohort_name>` and `<path_to_cohort>` variables should be a cohort ID string and path to cohort data, respectively, after running the data processing pipelines described below.
-<!-- ### CNN model -->
 
 
 ## How to run
@@ -153,7 +162,7 @@ def load_edf_dcsm(filepath, fs):
         channel_dict = json.load(json_file)
 
     return load_edf(filepath, fs, channel_dict)
-``` -->
+```
 The following function is added to `utils/sta_utils.py` to load correct hypnograms (DCSM hypnograms are in .ids format (Index/Duration/Stage)):
 ```
 def load_hypnogram_ids(hyp_file):
@@ -227,4 +236,4 @@ python predict.py --resume_from_checkpoint experiments/dcsm \
 Similarly to above, prediction speed is affected by adding a GPU and adding more workers by using the `--gpus` and `--n_workers` flags, respectively.
 
 
-[usleep]: https://doi.org/10.1038/s41746-021-00440-5
+[usleep]: https://doi.org/10.1038/s41746-021-00440-5 -->

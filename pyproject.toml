@@ -1,6 +1,29 @@
 [build-system]
-requires = [
-    "setuptools",
-    "wheel"
-]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "sleep-staging"
+version = "1.0.0"
+authors = [{name = "Alexander Neergaard Zahid", email = "aneol@dtu.dk"}]
+description = "High-frequency sleep staging."
+requires-python = ">=3.10"
+dependencies = [
+    "einops >= 0.4",
+    "h5py",
+    "librosa",
+    # "lightning >= 1.0",
+    "pytorch-lightning == 1.0.4",
+    "mne >= 1.0",
+    "rich",
+    "pandas",
+    "scikit-image",
+    "scikit-learn",
+    "xmltodict",
+]
+
+[project.scripts]
+ss-inference = "sleep_staging.inference:main_cli"
+
+[tool.setuptools]
+packages = ["sleep_staging"]

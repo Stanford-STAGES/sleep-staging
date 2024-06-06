@@ -9,6 +9,7 @@ import mne
 from sleep_staging.utils.errors import MissingHypnogramError
 from sleep_staging.utils.errors import MissingSignalsError
 from sleep_staging.utils.errors import ReferencingError
+from sleep_staging.utils.channel_label_identifier import run_channel_label_identifier
 
 
 UNIT_SCALING = {"µV": 1, "mV": 1e3, "V": 1e6}
@@ -328,7 +329,17 @@ def load_edf_template(filepath, fs):
 
 def load_edf_mapfile(filepath, fs, channel_map_file):
 
-    with open(channel_map_file) as json_file:
-        channel_dict = json.load(json_file)
+    # if isinstance(channel_map_file, dict):
+    #     channel_dict = channel_map_file
+    # else:
+    if channel_map_file.exists():
+        with open(channel_map_file) as json_file:
+            channel_dict = json.load(json_file)
+    else:
+        # If the file is not found, we assume the EDF file is in the same directory as the other files
+        if filepath[-4:] == ".edf":
+            filepath = filepath.split('/')
+        channel_dict = run_channel_label_identifier("/".join(filepath[:-1]), channel_map_file, ["C3", "C4", "O1", "O2", "EOGL", "EOGR", "EMG", "A1", "A2", "EOGRef", "EMGRef"])
+        filepath = "/".join(filepath)
 
     return load_edf(filepath, fs, channel_dict)

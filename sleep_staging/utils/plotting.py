@@ -4,7 +4,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as PathEffects
 import numpy as np
-import plotly.express as px
 from h5py import File
 from scipy import signal
 from sklearn.preprocessing import RobustScaler, MinMaxScaler

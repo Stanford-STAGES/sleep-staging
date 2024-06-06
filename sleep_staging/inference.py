@@ -2,7 +2,6 @@ import argparse
 import logging
 import pickle
 import re
-import signal
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -17,9 +16,7 @@ from sklearn import metrics
 from sklearn.preprocessing import RobustScaler
 from tqdm import tqdm
 
-import sleep_staging.models as models
 from sleep_staging.preprocessing.process_data import process_single_file
-from sleep_staging.utils.errors import MissingSignalsError
 from sleep_staging.utils.model_utils import get_model_from_ckpt
 
 FORMAT = "%(message)s"
@@ -193,9 +190,13 @@ def run_inference(args):
 
                 # Preprocessing
                 channel_map_file = Path("sleep_staging") / "utils" / "channel_dicts" / f"channels_{cohort}.json"
+                # if not channel_map_file.exists() and not all([args.eeg, args.eog, args.emg]):
+                #     raise FileNotFoundError(f"Channel map file not found: {channel_map_file}, please use appropriate argument flags to designate proper channel names!")
+                # elif not channel_map_file.exists() and all([args.eeg, args.eog, args.emg]):
+                #     channel_map_file = {'eeg': args.eeg, 'eog': args.eog, 'emg': args.emg}
                 try:
                     data, labels, _, stable_sleep, _, _ = process_single_file(
-                        str(data_path), args.fs, None, None, cohort, args.encoding, str(channel_map_file)
+                        str(data_path), args.fs, None, None, cohort, args.encoding, channel_map_file
                     )
                 except Exception as err:
                     logger.warning(err)
@@ -246,7 +247,6 @@ def run_inference(args):
     else:
         logger.info(f'Accuracies: {accuracies}')
 
-
     if len(error_files) > 0:
         logger.info(f'Was not able to process {len(error_files)} files:')
         [logger.info(f'\t{f}') for f in error_files]
@@ -257,17 +257,20 @@ def run_inference(args):
         np.savetxt(f"missing-hypnogram-studies_{args.cohort}.txt", missing_hyp, delimiter="\n", fmt="%s")
 
 
-if __name__ == "__main__":
+def main_cli():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-path", type=Path)
-    parser.add_argument("--data-file", type=Path)
-    parser.add_argument("--match-pattern", type=str)
-    parser.add_argument("--target-dir", type=Path, required=True)
-    parser.add_argument("--model-path", type=str, default="trained_models/usleep-large/best_model.ckpt")
-    parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "gpu"])
-    parser.add_argument("--fs", type=int, default=128)
-    parser.add_argument("--encoding", type=str, default="raw")
-    parser.add_argument("--cohort", type=str, default=None)
+    parser.add_argument("--data-path", type=Path, help="Path to directory containing data files")
+    parser.add_argument("--data-file", type=Path, help="Path to .csv file containing data paths")
+    parser.add_argument("--match-pattern", type=str, help="Pattern to match in filenames (optional)")
+    parser.add_argument("--target-dir", type=Path, required=True, help="Directory to save predictions")
+    parser.add_argument("--model-path", type=str, default="trained_models/usleep-large/best_model.ckpt", help="Path to model checkpoint")
+    parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "gpu"], help="Device to run inference on")
+    parser.add_argument("--fs", type=int, default=128, help="Sampling frequency of data")
+    parser.add_argument("--encoding", type=str, default="raw", help="Data encoding")
+    parser.add_argument("--cohort", type=str, default=None, help="Cohort to process")
+    # parser.add_argument("--eeg", type=str, default=None, nargs="+", help="Name of EEG channel(s)")
+    # parser.add_argument("--eog", type=str, default=None, nargs='+', help="Name of EOG channel(s)")
+    # parser.add_argument("--emg", type=str, default=None, nargs='+', help="Name of EMG channel(s)")
     args = parser.parse_args(
         # [
         #     "--data-path",
@@ -294,8 +297,8 @@ if __name__ == "__main__":
         else:
             logger.info(f"{k:>15}\t{v}")
 
-    # print(args)
-    # store the original SIGINT handler
-    # original_sigint = signal.getsignal(signal.SIGINT)
-    # signal.signal(signal.SIGINT, handler)
     run_inference(args)
+
+
+if __name__ == "__main__":
+    main_cli()

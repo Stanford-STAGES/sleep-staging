@@ -247,11 +247,11 @@ def load_signals(edf_file, fs, cohort, encoding, channel_map_file) -> np.ndarray
     else:
         keep_dict["occipital_hemi"] = None
         keep_dict["occipital_label"] = None
-    with open(
-        f'sleep_staging/preprocessing/logs/{cohort}_{edf_file.split("/")[-1].split(".")[0]}.channels', "w"
-    ) as fp:
-        json.dump(keep_dict, fp, ensure_ascii=False, indent=4, sort_keys=True)
-    logging.info(f"Printing JSON file with channel info")
+    # with open(
+    #     f'sleep_staging/preprocessing/logs/{cohort}_{edf_file.split("/")[-1].split(".")[0]}.channels', "w"
+    # ) as fp:
+    #     json.dump(keep_dict, fp, ensure_ascii=False, indent=4, sort_keys=True)
+    # logging.info(f"Printing JSON file with channel info")
     # return None
 
     # Select only kept channels

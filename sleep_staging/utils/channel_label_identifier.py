@@ -31,7 +31,7 @@ from pathlib import Path
 
 from joblib import delayed
 
-from sleep_staging.utils import ParallelExecutor
+from sleep_staging.utils.parallel_bar import ParallelExecutor
 
 try:
     import mne
@@ -156,15 +156,15 @@ def printUsage(toolName):
     print("Example:\n\t", toolName, " . C3 C4")
 
 
-def run(args):
-    path2check = args.data_dir
-    json_filename = args.json_out
+def run_channel_label_identifier(data_dir, json_out, channels):
+    path2check = data_dir
+    json_filename = json_out
     # jsonFileOut = json_filename
     # jsonFileOut = Path('./src/config/signal_labels').joinpath(json_filename)
     # jsonFileOut = Path(path2check).joinpath(json_filename)
     # jsonFileOut = Path('/home/alexno/Documents/utils').joinpath(JSON_FILENAME)
     # jsonFileOut = Path(path2check).joinpath(JSON_FILENAME)
-    channelsToID = args.channels
+    channelsToID = channels
 
     edfFiles = getEDFFilenames(path2check)
     num_edfs = len(edfFiles)
@@ -202,13 +202,16 @@ def run(args):
                 print("Selected: ", selectedLabels)
                 toFile[ch] = selectedLabels
 
-            with open(json_filename, "w") as json_file:
-                json.dump(toFile, json_file, indent=4, sort_keys=True)
-            # jsonStr = json.dumps(toFile, indent=4, sort_keys=True)
-            # json_filename.write_text(jsonStr)
-            print(json.dumps(toFile))
-            print()
-            print("JSON data written to file:", json_filename)
+            if json_filename is not None:
+                with open(json_filename, "w") as json_file:
+                    json.dump(toFile, json_file, indent=4, sort_keys=True)
+                # jsonStr = json.dumps(toFile, indent=4, sort_keys=True)
+                # json_filename.write_text(jsonStr)
+                print(json.dumps(toFile))
+                print()
+                print("JSON data written to file:", json_filename)
+
+            return toFile
 
 
 if __name__ == "__main__":
@@ -225,4 +228,4 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         printUsage(sys.argv[0])
     else:
-        run(args)
+        run_channel_label_identifier(args.data_dir, args.json_out, args.channels)
