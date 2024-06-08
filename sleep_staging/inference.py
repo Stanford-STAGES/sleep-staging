@@ -22,6 +22,7 @@ from sleep_staging.utils.model_utils import get_model_from_ckpt
 FORMAT = "%(message)s"
 logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=Console(width=255))])
 logger = logging.getLogger("rich")
+FS = 128
 
 
 def check_datafile(data_file: Path):
@@ -196,7 +197,7 @@ def run_inference(args):
                 #     channel_map_file = {'eeg': args.eeg, 'eog': args.eog, 'emg': args.emg}
                 try:
                     data, labels, _, stable_sleep, _, _ = process_single_file(
-                        str(data_path), args.fs, None, None, cohort, args.encoding, channel_map_file
+                        str(data_path), FS, None, None, cohort, args.encoding, channel_map_file
                     )
                 except Exception as err:
                     logger.warning(err)
@@ -265,7 +266,6 @@ def main_cli():
     parser.add_argument("--target-dir", type=Path, required=True, help="Directory to save predictions")
     parser.add_argument("--model-path", type=str, default="trained_models/usleep-large/best_model.ckpt", help="Path to model checkpoint")
     parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "gpu"], help="Device to run inference on")
-    parser.add_argument("--fs", type=int, default=128, help="Sampling frequency of data")
     parser.add_argument("--encoding", type=str, default="raw", help="Data encoding")
     parser.add_argument("--cohort", type=str, default=None, help="Cohort to process")
     # parser.add_argument("--eeg", type=str, default=None, nargs="+", help="Name of EEG channel(s)")
