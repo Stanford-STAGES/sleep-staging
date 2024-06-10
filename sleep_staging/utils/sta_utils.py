@@ -505,10 +505,10 @@ def load_hypnogram_csv(fileid):
 
     if not isinstance(fileid, Path):
         fileid = Path(fileid)
-    
+
     if not '.csv' in fileid.suffix.lower():
         fileid = fileid.with_suffix('.csv')
-    
+
     if not fileid.exists():
         return None
 
@@ -527,26 +527,26 @@ def load_hypnogram_csv(fileid):
     # try:
     #     df = pd.read_csv(fileid, skiprows=1, sep=None, usecols=[0, 1, 2], names=['Start Time', 'Duration (seconds)', 'Event']).dropna(0)
     # except Exception:
-    df = pd.read_csv(fileid, skiprows=1, usecols=[0, 1, 2], names=['Start Time', 'Duration (seconds)', 'Event']).dropna(0)
+    df = pd.read_csv(fileid, skiprows=1, usecols=[0, 1, 2], names=['Start Time', 'Duration (seconds)', 'Event']).dropna(axis=0)
     # while True:
     #     df = pd.read_csv(fileid, names=['Start Time', 'Duration (seconds)', 'Event', 'comment'])
-    #     if 
-    
+    #     if
+
     # Remove any NaN containing rows
     # df.dropna(axis=0)
 
     if df.empty:
         print("Dataframe does not contain any sleep stages")
         return None
-    
+
     if len(df) < 10:
         print(f'Subject {fileid.stem} has no hypnogram')
         return None
-    
+
     # Create "Relative starting time" and "Duration" for events
-    # -------------   
+    # -------------
     df['Event'] = df['Event'].apply(lambda x: clean_string(x))
-    
+
     # Convert timestamps to datetime objects
     timestamps_dt = [datetime.strptime(ts, time_format) for ts in df['Start Time']]
 
@@ -554,7 +554,7 @@ def load_hypnogram_csv(fileid):
     for i in range(1, len(timestamps_dt)):
         if timestamps_dt[i] < timestamps_dt[i-1]:
             timestamps_dt[i] += timedelta(days=1)
-    
+
     # set start time - we could setup this to be changed from outside
     start_time = timestamps_dt[0]
 
@@ -565,7 +565,7 @@ def load_hypnogram_csv(fileid):
     except AssertionError:
         print('Sorting df containing hypnogram...')
         df = df.sort_values('Start Time relative')
-    
+
     # Select sleep stages only, and set to 30 second duration
     df_ = df[df['Event'].isin(wake + rem + n1 + n2 + n3)].copy()
     if df_.empty:
@@ -611,7 +611,7 @@ def load_hypnogram_csv(fileid):
         if df_idx < df_.shape[0] - 1:
             next_event = df_.iloc[df_idx + 1]
             idx_stop = int(next_event['Start Time relative'])
-        else: 
+        else:
             idx_stop = int(idx_start + event['Duration (seconds)']) if event['Duration (seconds)'] > 0 else int(idx_start + 30)
         # idx_stop = int(event['Duration (seconds)']) + idx_start
         assert((idx_stop - idx_start) % 30 == 0)
@@ -622,19 +622,19 @@ def load_hypnogram_csv(fileid):
     return hypnogram
 
     # return np.asarray(hypnogram)[:, np.newaxis]
-    
+
     # recording_duration_sec = int(df_['Start Time relative'].iloc[-1] + df_['Duration (seconds)'].iloc[-1])
     # assert(recording_duration_sec % 30 == 0)
 
     # hypnogram = np.zeros((recording_duration_sec, 1), dtype=np.uint32)
-    
+
     # # iterate over events
     # for n, event in df_.iterrows():
     #     hypnogram[int(event['Start Time relative']) : int(event['Start Time relative'] + event['Duration (seconds)'])] = event['Event_idx']
-    
+
     # # set unassigned to 7
     # hypnogram[hypnogram == 0] = 7
-    
+
     # # Reshape the array to create groups of 30 along the first axis --> median
     # hypnogram_resampled = np.median(hypnogram.reshape(-1, 30, hypnogram.shape[1]), axis=1).astype(int)
 
