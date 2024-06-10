@@ -24,9 +24,9 @@ After installing the environment as stated above, new data can be run using the 
 ```
 ss-inference --data-path <directory containing EDF files> \
              --match-pattern <optional, specificy a file pattern> \
-             --target <output directory> \
-             --fs <output sampling frequency> \
-             --cohort <name of the EDF collection, will be used to define output directories>
+             --target-dir <output directory> \
+             --cohort <name of the EDF collection, will be used to define output directories> \
+             --device <use GPU or CPU, default CPU>
 ```
 <!--
 ## Using pre-trained models for inference
