@@ -30,17 +30,31 @@ except FileNotFoundError:
     except FileNotFoundError:
         df = None
 
-noiseM = sio.loadmat("sleep_staging/preprocessing/noiseM.mat", squeeze_me=True, mat_dtype=False)["noiseM"]
+noiseM = sio.loadmat(
+    os.path.join(os.path.dirname(sys.modules["sleep_staging"].__file__), "preprocessing", "noiseM.mat"),
+    squeeze_me=True,
+    mat_dtype=False,
+)["noiseM"]
 meanV = noiseM["meanV"].item()
 covM = noiseM["covM"].item()
 
 # logger = logging.getLogger(__package__)
 
 # Filter specifications for resampling from MATLAB
-with open("sleep_staging/utils/filter_coefficients/filter_specs.json", "r") as json_file:
+with open(
+    os.path.join(
+        os.path.dirname(sys.modules["sleep_staging"].__file__), "utils", "filter_coefficients", "filter_specs.json"
+    ),
+    "r",
+) as json_file:
     filter_specs = json.load(json_file)
 
-with open("sleep_staging/utils/channel_dicts/channel_names.txt", "r") as txt_file:
+with open(
+    os.path.join(
+        os.path.dirname(sys.modules["sleep_staging"].__file__), "utils", "channel_dicts", "channel_names.txt"
+    ),
+    "r",
+) as txt_file:
     ch_names = [re.split(", ", line.rstrip()) for line in txt_file]
 
 
@@ -92,9 +106,9 @@ def extract_hjorth(x, fs, dim=5 * 60, slide=5 * 60):
     # Extract Hjorth params for each segment
     dD = np.diff(D, 1, axis=0)
     ddD = np.diff(dD, 1, axis=0)
-    mD2 = np.mean(D ** 2, axis=0)
-    mdD2 = np.mean(dD ** 2, axis=0)
-    mddD2 = np.mean(ddD ** 2, axis=0)
+    mD2 = np.mean(D**2, axis=0)
+    mdD2 = np.mean(dD**2, axis=0)
+    mddD2 = np.mean(ddD**2, axis=0)
 
     top = np.sqrt(np.divide(mddD2, mdD2 + np.finfo(float).eps))
 
@@ -283,7 +297,7 @@ def trim_data_and_hypnogram(data, hypnogram, fs):
     # hypnogram = hypnogram[: T // t, :]
     N_old, K = hypnogram.shape
     empty_hypnogram = all(hypnogram == 7)
-    data = rearrange(data, 'C (N t) -> N t C', C=C, t=t)
+    data = rearrange(data, "C (N t) -> N t C", C=C, t=t)
     # data = rearrange(data, "C (N t) -> N C t", C=C, N=N_old, t=t)
     # data = rearrange(data, "C (N t) -> N C t", C=C, t=t)
     if not empty_hypnogram:
@@ -295,28 +309,28 @@ def trim_data_and_hypnogram(data, hypnogram, fs):
             scoring_end = -np.argwhere(hypnogram[::-1] != 7)[0, 0]
         else:
             scoring_end = None
-    #     if not all(hypnogram == 7):
-    #         scoring_start = np.argwhere(hypnogram != 7)[0, 0]
-    #         scoring_end = (
-    #             -np.argwhere(hypnogram[::-1] != 7)[0, 0] or None
-    #         )  # If there's no trailing 7's, we need to set this to None
-    #     else:
-    #         scoring_start = 0
-    #         scoring_end = None
-    # hypnogram = hypnogram[scoring_start:scoring_end]
+        #     if not all(hypnogram == 7):
+        #         scoring_start = np.argwhere(hypnogram != 7)[0, 0]
+        #         scoring_end = (
+        #             -np.argwhere(hypnogram[::-1] != 7)[0, 0] or None
+        #         )  # If there's no trailing 7's, we need to set this to None
+        #     else:
+        #         scoring_start = 0
+        #         scoring_end = None
+        # hypnogram = hypnogram[scoring_start:scoring_end]
         hypnogram = hypnogram[scoring_start:scoring_end]
         N_1s, K = hypnogram.shape
-        data = data[scoring_start:scoring_start + N_1s]
+        data = data[scoring_start : scoring_start + N_1s]
     else:
         N_1s, *_ = data.shape
         N_30s = N_1s // 30
         N_1s = N_30s * 30
-        hypnogram = hypnogram[: N_1s]
-        data = data[: N_1s]
+        hypnogram = hypnogram[:N_1s]
+        data = data[:N_1s]
 
     # Rearrange to 30 s
-    hypnogram = rearrange(hypnogram, '(N M) 1 -> N M 1', M=30).mean(axis=1).astype(np.uint32)
-    data = rearrange(data, 'N t C -> C (N t)', C=C, t=t)
+    hypnogram = rearrange(hypnogram, "(N M) 1 -> N M 1", M=30).mean(axis=1).astype(np.uint32)
+    data = rearrange(data, "N t C -> C (N t)", C=C, t=t)
     # data = rearrange(data[scoring_start:scoring_end], "N C t -> C (N t)", C=C, N=N_new, t=t)
     # data = rearrange(data[scoring_start:scoring_start + N_new], "N C t -> C (N t)", C=C, N=N_new, t=t)
     logging.info(f"Trimming {N_old-N_1s} epochs from {N_old} to {N_1s}")
