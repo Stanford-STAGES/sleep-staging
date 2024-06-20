@@ -2,6 +2,7 @@
 ## This is done to ensure that the commands are always executed, even if a file with the same name exists
 ## See https://www.gnu.org/software/make/manual/html_node/Phony-Targets.html
 ## Remove this if you want to use this Makefile for real targets
+MAKEFLAGS += --silent
 .PHONY: *
 
 #################################################################################
@@ -16,12 +17,14 @@ PYTHON_INTERPRETER = python
 # COMMANDS                                                                      #
 #################################################################################
 
-## Set up python interpreter environment
+## Set up Python interpreter environment
 create_environment:
 	conda create --name $(PROJECT_NAME) python=$(PYTHON_VERSION) --no-default-packages -y
 
-## Install Python Dependencies
-requirements: create_environment
+## Install package and dependencies
+install: create_environment
+	echo "----------------------------------------------------------------------"
+	echo "Installing project package and requirements"
 	conda run -n $(PROJECT_NAME) $(PYTHON_INTERPRETER) -m pip install -e .
 
 ## Delete all compiled Python files
