@@ -4,6 +4,7 @@ import pickle
 import re
 import sys
 from pathlib import Path
+from shutil import get_terminal_size
 from typing import List, Optional
 
 import numpy as np
@@ -20,9 +21,15 @@ from sleep_staging.preprocessing.process_data import process_single_file
 from sleep_staging.utils.model_utils import get_model_from_ckpt
 
 FORMAT = "%(message)s"
-logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=Console(width=255))])
+logging.basicConfig(
+    level="NOTSET",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(console=Console(width=get_terminal_size()[0]))],
+)
 logger = logging.getLogger("rich")
 FS = 128
+PACKAGE_DIR = Path(sys.modules["sleep_staging"].__file__).parent
 
 
 def check_datafile(data_file: Path):
@@ -109,7 +116,7 @@ def get_datapaths(
                     data_files = list(set(directory.glob(f"{filename.lower()}*.[eErR][dDeE][fFcC]")))
                     if len(data_files) == 0:
                         data_files = list(set(directory.glob(f"{filename.upper()}*.[eErR][dDeE][fFcC]")))
-                if len(data_files) == 0: # Don't know why recursive globbing isn't used above
+                if len(data_files) == 0:  # Don't know why recursive globbing isn't used above
                     data_files = list(set(directory.rglob(f"{filename}.[EeRr][DdEe][FfCc]")))
                 if len(data_files) == 1:
                     if pattern is not None:
@@ -135,20 +142,27 @@ def get_datapaths(
     return data_list, df
 
 
-def run_inference(args):
+def run_inference(
+    data_path: Path,
+    data_file: Path,
+    target_dir: Path,
+    model_path: str,
+    device: str,
+    cohort: str,
+    encoding: str = "raw",
+    match_pattern: str = None,
+):
 
-    # check_datafile(args.data_file)
+    # check_datafile(data_file)
     # return
     # Determine data type
-    data_paths, df = get_datapaths(
-        data_path=args.data_path, data_file=args.data_file, cohort=args.cohort, pattern=args.match_pattern
-    )
+    data_paths, df = get_datapaths(data_path=data_path, data_file=data_file, cohort=cohort, pattern=match_pattern)
     # data_paths = data_paths[:10]
     # df = df[:10]
 
     # Get model and device
-    device = torch.device(args.device)
-    model = get_model_from_ckpt(ckpt_path=args.model_path, device=device)
+    device = torch.device(device)
+    model = get_model_from_ckpt(ckpt_path=model_path, device=device)
     n_channels = model.example_input_array.shape[1]
 
     # Run over data files
@@ -171,13 +185,13 @@ def run_inference(args):
                 else:
                     idx, row = None, None
                     # cohort = data_path.parent.stem.split("_")[0].lower()
-                    cohort = args.cohort
+                    cohort = cohort
                     subject_id = data_path.stem
 
                 # if "060207BB" not in subject_id:
                 #     continue
-                # if (args.target_dir / cohort / f"preds_{subject_id}.pkl").exists() and (
-                #     args.target_dir / cohort / f"preds_{subject_id}.pkl"
+                # if (target_dir / cohort / f"preds_{subject_id}.pkl").exists() and (
+                #     target_dir / cohort / f"preds_{subject_id}.pkl"
                 # ).stat().st_size > 1e6:
                 #     logger.info(f'Skipping {subject_id}, file exits...')
                 #     continue
@@ -190,14 +204,14 @@ def run_inference(args):
                 pbar.set_postfix(cohort=cohort, subject=subject_id)
 
                 # Preprocessing
-                channel_map_file = Path("sleep_staging") / "utils" / "channel_dicts" / f"channels_{cohort}.json"
-                # if not channel_map_file.exists() and not all([args.eeg, args.eog, args.emg]):
+                channel_map_file = PACKAGE_DIR / "utils" / "channel_dicts" / f"channels_{cohort}.json"
+                # if not channel_map_file.exists() and not all([eeg, eog, emg]):
                 #     raise FileNotFoundError(f"Channel map file not found: {channel_map_file}, please use appropriate argument flags to designate proper channel names!")
-                # elif not channel_map_file.exists() and all([args.eeg, args.eog, args.emg]):
-                #     channel_map_file = {'eeg': args.eeg, 'eog': args.eog, 'emg': args.emg}
+                # elif not channel_map_file.exists() and all([eeg, eog, emg]):
+                #     channel_map_file = {'eeg': eeg, 'eog': eog, 'emg': emg}
                 try:
                     data, labels, _, stable_sleep, _, _ = process_single_file(
-                        str(data_path), FS, None, None, cohort, args.encoding, channel_map_file
+                        str(data_path), FS, None, None, cohort, encoding, channel_map_file
                     )
                 except Exception as err:
                     logger.warning(err)
@@ -223,7 +237,7 @@ def run_inference(args):
                 yhat["targets"] = labels.squeeze()
 
                 # Calculate accuracy
-                acc = metrics.accuracy_score(yhat['targets'].argmax(0)[::30], yhat['yhat_30s'].argmax(1))
+                acc = metrics.accuracy_score(yhat["targets"].argmax(0)[::30], yhat["yhat_30s"].argmax(1))
                 logger.info(f"[ {subject_id} ] Accuracy @ 30 s: {acc:.3f}")
                 if len(np.unique(labels)) > 1:
                     accuracies.append(acc)
@@ -234,7 +248,7 @@ def run_inference(args):
                 )
                 if len(np.unique(yhat["targets"].argmax(0))) <= 1:
                     missing_hyp.append(str(data_path))
-                cohort_dir = args.target_dir / cohort
+                cohort_dir = target_dir / cohort
                 cohort_dir.mkdir(exist_ok=True, parents=True)
                 with open(cohort_dir / f"preds_{subject_id}.pkl", "wb") as pkl:
                     pickle.dump(yhat, pkl)
@@ -242,20 +256,20 @@ def run_inference(args):
 
                 success_files += 1
 
-    logger.info(f'Successfully completed {success_files} files!')
+    logger.info(f"Successfully completed {success_files} files!")
     if len(accuracies) >= 3:
-        logger.info(f'Accuracy: {np.mean(accuracies):.3f}±{np.std(accuracies):.3f}')
+        logger.info(f"Accuracy: {np.mean(accuracies):.3f}±{np.std(accuracies):.3f}")
     else:
-        logger.info(f'Accuracies: {accuracies}')
+        logger.info(f"Accuracies: {accuracies}")
 
     if len(error_files) > 0:
-        logger.info(f'Was not able to process {len(error_files)} files:')
-        [logger.info(f'\t{f}') for f in error_files]
+        logger.info(f"Was not able to process {len(error_files)} files:")
+        [logger.info(f"\t{f}") for f in error_files]
 
     if len(missing_files) > 0:
-        np.savetxt(f"missing-studies_{args.cohort}_4.txt", missing_files, delimiter="\n", fmt="%s")
+        np.savetxt(f"missing-studies_{cohort}_4.txt", missing_files, delimiter="\n", fmt="%s")
     if len(missing_hyp) > 0:
-        np.savetxt(f"missing-hypnogram-studies_{args.cohort}.txt", missing_hyp, delimiter="\n", fmt="%s")
+        np.savetxt(f"missing-hypnogram-studies_{cohort}.txt", missing_hyp, delimiter="\n", fmt="%s")
 
 
 def main_cli():
@@ -264,7 +278,12 @@ def main_cli():
     parser.add_argument("--data-file", type=Path, help="Path to .csv file containing data paths")
     parser.add_argument("--match-pattern", type=str, help="Pattern to match in filenames (optional)")
     parser.add_argument("--target-dir", type=Path, required=True, help="Directory to save predictions")
-    parser.add_argument("--model-path", type=str, default="trained_models/usleep-large/best_model.ckpt", help="Path to model checkpoint")
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        default="trained_models/usleep-large/best_model.ckpt",
+        help="Path to model checkpoint",
+    )
     parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "gpu"], help="Device to run inference on")
     parser.add_argument("--encoding", type=str, default="raw", help="Data encoding")
     parser.add_argument("--cohort", type=str, default=None, help="Cohort to process")
@@ -297,7 +316,7 @@ def main_cli():
         else:
             logger.info(f"{k:>15}\t{v}")
 
-    run_inference(args)
+    run_inference(**vars(args))
 
 
 if __name__ == "__main__":
