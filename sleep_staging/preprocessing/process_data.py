@@ -6,6 +6,7 @@ import random
 import re
 import sys
 from glob import glob
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -19,19 +20,13 @@ from tqdm import tqdm
 from sleep_staging.utils import load_edf_mapfile, load_scored_data
 from sleep_staging.utils.h5_utils import save_h5
 
+PACKAGE_DIR = Path(sys.modules['sleep_staging'].__file__).parent
+
 cc_sizes = [2, 2, 4, 4, 0.4]
 cc_overlap = 0.25
 
-try:
-    df = pd.read_csv("overview_file_cohortsEM-ling1.csv")
-except FileNotFoundError:
-    try:
-        df = pd.read_csv("data_master.csv")
-    except FileNotFoundError:
-        df = None
-
 noiseM = sio.loadmat(
-    os.path.join(os.path.dirname(sys.modules["sleep_staging"].__file__), "preprocessing", "noiseM.mat"),
+    PACKAGE_DIR / "preprocessing" / "noiseM.mat",
     squeeze_me=True,
     mat_dtype=False,
 )["noiseM"]
@@ -42,17 +37,13 @@ covM = noiseM["covM"].item()
 
 # Filter specifications for resampling from MATLAB
 with open(
-    os.path.join(
-        os.path.dirname(sys.modules["sleep_staging"].__file__), "utils", "filter_coefficients", "filter_specs.json"
-    ),
+    PACKAGE_DIR / "utils" / "filter_coefficients" / "filter_specs.json",
     "r",
 ) as json_file:
     filter_specs = json.load(json_file)
 
 with open(
-    os.path.join(
-        os.path.dirname(sys.modules["sleep_staging"].__file__), "utils", "channel_dicts", "channel_names.txt"
-    ),
+    PACKAGE_DIR / "utils" / "channel_dicts" / "channel_names.txt",
     "r",
 ) as txt_file:
     ch_names = [re.split(", ", line.rstrip()) for line in txt_file]
