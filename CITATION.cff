@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+
+title: "Multimodal sleep stage classification algorithm"
+type: software
+version: 1.0.0
+date-released: "2026-09-XX"
+
+authors:
+  - family-names: "Zahid"
+    given-names: "Alexander Neergaard"
+    orcid: "https://orcid.org/0000-0001-6881-9766"
+    affiliation: "Technical University of Denmark"
+
+  - family-names: "Olsen"
+    given-names: "Mads"
+    orcid: "https://orcid.org/0000-0002-9071-6760"
+    affiliation: "Phastar"
+
+license: GPL-3.0-only
+
+repository-code: "https://github.com/Stanford-STAGES/sleep-staging.git"
+
+keywords:
+  - machine learning
+  - polysomnography
+  - sleep analysis
